@@ -1,0 +1,19 @@
+services:
+  netdoc:
+    build: .
+    container_name: netdoc
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - netdoc-data:/data
+    environment:
+      # Poll every 5 minutes by default.
+      NETDOC_POLL_INTERVAL_SECONDS: "300"
+      # Optional: pin the encryption key instead of letting netdoc generate
+      # and persist one at /data/master.key on first run. If you set this,
+      # back it up - losing it makes stored credentials unrecoverable.
+      # NETDOC_MASTER_KEY: ""
+
+volumes:
+  netdoc-data:
