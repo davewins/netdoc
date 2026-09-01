@@ -1,4 +1,5 @@
 from .base import BaseConnector, ConnectorError, DiscoveredAsset
+from .network_scan import NetworkScanConnector
 from .pihole import PiholeConnector
 from .portainer import PortainerConnector
 from .proxmox import ProxmoxConnector
@@ -7,6 +8,7 @@ CONNECTOR_TYPES = {
     "proxmox": ProxmoxConnector,
     "portainer": PortainerConnector,
     "pihole": PiholeConnector,
+    "network_scan": NetworkScanConnector,
 }
 
 

@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -47,8 +48,11 @@ class Asset(Base):
     id = Column(Integer, primary_key=True)
     connector_id = Column(Integer, ForeignKey("connectors.id"), nullable=True)
     parent_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
+    canonical_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
 
-    asset_type = Column(String, nullable=False)  # proxmox_node, vm, lxc, docker_host, docker_container, dns_record, host, device
+    # proxmox_node, vm, lxc, docker_host, docker_stack, docker_container,
+    # dns_record, dhcp_reservation, device, host
+    asset_type = Column(String, nullable=False)
     external_id = Column(String, nullable=True)  # id on the source system; null for manual assets
     source = Column(String, default="manual")  # discovered | manual
 
@@ -57,6 +61,11 @@ class Asset(Base):
     ip_address = Column(String, nullable=True)
     mac_address = Column(String, nullable=True)
     status = Column(String, nullable=True)
+
+    cpu_cores = Column(Integer, nullable=True)
+    memory_mb = Column(Integer, nullable=True)
+    disk_gb = Column(Float, nullable=True)
+    uptime_seconds = Column(Integer, nullable=True)
 
     raw_data = Column(JSON, nullable=True)
 
@@ -70,8 +79,35 @@ class Asset(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     connector = relationship("Connector", back_populates="assets")
-    parent = relationship("Asset", remote_side=[id], backref="children")
+    parent = relationship("Asset", remote_side=[id], foreign_keys=[parent_id], backref="children")
+    canonical_asset = relationship(
+        "Asset", remote_side=[id], foreign_keys=[canonical_asset_id], backref="merged_assets"
+    )
     credentials = relationship("Credential", back_populates="asset", cascade="all, delete-orphan")
+
+
+class AssetLink(Base):
+    """Records a same-host relationship between two assets discovered from
+    different sources (e.g. a Pi-hole DHCP reservation and a Proxmox VM).
+
+    reason: "mac" (auto-confirmed) or "ip" (needs confirmation, since IPs
+    get reassigned by DHCP but MACs don't).
+    status: "confirmed" | "pending" | "rejected".
+    """
+
+    __tablename__ = "asset_links"
+    __table_args__ = (UniqueConstraint("primary_asset_id", "secondary_asset_id", name="uq_asset_link_pair"),)
+
+    id = Column(Integer, primary_key=True)
+    primary_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
+    secondary_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
+    reason = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    primary_asset = relationship("Asset", foreign_keys=[primary_asset_id])
+    secondary_asset = relationship("Asset", foreign_keys=[secondary_asset_id])
 
 
 class Credential(Base):

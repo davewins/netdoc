@@ -3,6 +3,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Asset, PortEntry } from "../types";
 
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  if (days > 0) return `${days}d ${hours}h`;
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
 export default function AssetDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -75,8 +83,46 @@ export default function AssetDetail() {
       <p className="muted">
         {asset.asset_type} · {asset.source}
         {asset.ip_address ? ` · ${asset.ip_address}` : ""}
+        {asset.mac_address ? ` · ${asset.mac_address}` : ""}
         {asset.status ? ` · ${asset.status}` : ""}
       </p>
+      {(asset.cpu_cores || asset.memory_mb || asset.disk_gb || asset.uptime_seconds) && (
+        <p className="muted">
+          {asset.cpu_cores ? `${asset.cpu_cores} vCPU` : null}
+          {asset.memory_mb ? ` · ${(asset.memory_mb / 1024).toFixed(1)} GB RAM` : null}
+          {asset.disk_gb ? ` · ${asset.disk_gb} GB disk` : null}
+          {asset.uptime_seconds ? ` · up ${formatUptime(asset.uptime_seconds)}` : null}
+        </p>
+      )}
+
+      {asset.canonical_asset_id && (
+        <div className="card status-error">
+          This record has been merged into{" "}
+          <Link className="row-link" to={`/assets/${asset.canonical_asset_id}`}>
+            asset #{asset.canonical_asset_id}
+          </Link>
+          . View it there for the combined enrichment.
+        </div>
+      )}
+
+      {asset.linked_assets.length > 0 && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>Also known as</h2>
+          <p className="muted">Same physical/virtual host, identified via other sources:</p>
+          {asset.linked_assets.map((l) => (
+            <div key={l.id} style={{ marginBottom: 6 }}>
+              <Link className="row-link" to={`/assets/${l.id}`}>
+                {l.name}
+              </Link>{" "}
+              <span className="muted">
+                ({l.asset_type}
+                {l.ip_address ? `, ${l.ip_address}` : ""}
+                {l.mac_address ? `, ${l.mac_address}` : ""}) - linked via {l.link_reason}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Enrichment</h2>

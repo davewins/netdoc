@@ -13,6 +13,11 @@ const CONNECTOR_FIELDS: Record<string, { key: string; label: string; type?: stri
     { key: "password", label: "Password (if no API key)", type: "password" },
   ],
   pihole: [{ key: "password", label: "Web UI / app password", type: "password" }],
+  network_scan: [],
+};
+
+const BASE_URL_LABEL: Record<string, string> = {
+  network_scan: "Network range to scan (CIDR, e.g. 192.168.1.0/24)",
 };
 
 export default function Connectors() {
@@ -156,6 +161,7 @@ function AddConnectorForm({ onCreated }: { onCreated: () => void }) {
             <option value="proxmox">Proxmox VE</option>
             <option value="portainer">Portainer</option>
             <option value="pihole">Pi-hole</option>
+            <option value="network_scan">Network scan (nmap)</option>
           </select>
         </div>
         <div>
@@ -163,24 +169,33 @@ function AddConnectorForm({ onCreated }: { onCreated: () => void }) {
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="pve-1" />
         </div>
         <div>
-          <label>Base URL</label>
+          <label>{BASE_URL_LABEL[type] ?? "Base URL"}</label>
           <input
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://192.168.1.5:8006"
+            placeholder={type === "network_scan" ? "192.168.1.0/24" : "https://192.168.1.5:8006"}
           />
         </div>
       </div>
 
-      <label>
-        <input
-          type="checkbox"
-          style={{ width: "auto", marginRight: 6 }}
-          checked={verifySsl}
-          onChange={(e) => setVerifySsl(e.target.checked)}
-        />
-        Verify TLS certificate
-      </label>
+      {type !== "network_scan" && (
+        <label>
+          <input
+            type="checkbox"
+            style={{ width: "auto", marginRight: 6 }}
+            checked={verifySsl}
+            onChange={(e) => setVerifySsl(e.target.checked)}
+          />
+          Verify TLS certificate
+        </label>
+      )}
+
+      {type === "network_scan" && (
+        <p className="muted">
+          Requires netdoc to run with host networking (see docker-compose.yml) - otherwise it can only see
+          Docker's own bridge network, not your LAN.
+        </p>
+      )}
 
       {(CONNECTOR_FIELDS[type] ?? []).map((f) => (
         <div key={f.key}>

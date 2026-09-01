@@ -2,9 +2,40 @@ import requests
 
 from .base import BaseConnector, ConnectorError, DiscoveredAsset
 
+# Substring -> service label, checked against the container's image name.
+SERVICE_HINTS = {
+    "traefik": "traefik",
+    "nginx-proxy-manager": "nginx-proxy-manager",
+    "nginxproxymanager": "nginx-proxy-manager",
+    "caddy": "caddy",
+    "acme.sh": "acme",
+    "certbot": "acme",
+    "pihole": "pihole",
+    "homeassistant": "home-assistant",
+    "home-assistant": "home-assistant",
+    "portainer": "portainer",
+    "watchtower": "watchtower",
+    "postgres": "postgres",
+    "mysql": "mysql",
+    "mariadb": "mariadb",
+    "redis": "redis",
+    "plex": "plex",
+    "jellyfin": "jellyfin",
+    "grafana": "grafana",
+    "prometheus": "prometheus",
+    "vaultwarden": "vaultwarden",
+}
+
+
+def _guess_services(image: str | None) -> list[str]:
+    if not image:
+        return []
+    image_lower = image.lower()
+    return sorted({label for needle, label in SERVICE_HINTS.items() if needle in image_lower})
+
 
 class PortainerConnector(BaseConnector):
-    """Discovers environments (endpoints) and their Docker containers.
+    """Discovers environments (endpoints), stacks and Docker containers.
 
     Expected credentials dict, either:
       {"api_key": "ptr_..."}
@@ -46,6 +77,45 @@ class PortainerConnector(BaseConnector):
             raise ConnectorError(f"Portainer API {path} returned {resp.status_code}: {resp.text[:200]}")
         return resp.json()
 
+    @staticmethod
+    def _primary_network(container: dict) -> tuple[str | None, str | None]:
+        networks = (container.get("NetworkSettings") or {}).get("Networks") or {}
+        for net in networks.values():
+            ip = net.get("IPAddress")
+            mac = net.get("MacAddress")
+            if ip:
+                return ip, mac or None
+        return None, None
+
+    @staticmethod
+    def _ports_from_docker(container: dict) -> list[dict]:
+        entries = []
+        for p in container.get("Ports", []):
+            port = p.get("PublicPort") or p.get("PrivatePort")
+            if not port:
+                continue
+            entries.append(
+                {
+                    "port": port,
+                    "protocol": p.get("Type", "tcp"),
+                    "description": f"container port {p.get('PrivatePort')}",
+                }
+            )
+        # de-dupe while preserving order
+        seen = set()
+        deduped = []
+        for e in entries:
+            key = (e["port"], e["protocol"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(e)
+        return deduped
+
+    def _stack_name_for(self, container: dict) -> str | None:
+        labels = container.get("Labels") or {}
+        return labels.get("com.docker.compose.project") or labels.get("com.docker.stack.namespace")
+
     def poll(self) -> list[DiscoveredAsset]:
         assets: list[DiscoveredAsset] = []
 
@@ -64,21 +134,69 @@ class PortainerConnector(BaseConnector):
             )
 
             try:
+                stacks = [s for s in self._get("/api/stacks") if s.get("EndpointId") == ep_id]
+            except ConnectorError:
+                stacks = []
+            stack_name_to_external_id = {}
+            for stack in stacks:
+                stack_external_id = f"endpoint/{ep_id}/stack/{stack['Id']}"
+                stack_name_to_external_id[stack["Name"]] = stack_external_id
+                assets.append(
+                    DiscoveredAsset(
+                        asset_type="docker_stack",
+                        external_id=stack_external_id,
+                        name=stack["Name"],
+                        status=stack.get("Status") and "active" or None,
+                        parent_external_id=f"endpoint/{ep_id}",
+                        raw_data=stack,
+                    )
+                )
+
+            try:
                 containers = self._get(f"/api/endpoints/{ep_id}/docker/containers/json?all=true")
             except ConnectorError:
                 continue
 
             for c in containers:
                 name = (c.get("Names") or ["/unknown"])[0].lstrip("/")
-                ports = c.get("Ports", [])
+                ip, mac = self._primary_network(c)
+                stack_name = self._stack_name_for(c)
+                parent_external_id = stack_name_to_external_id.get(stack_name, f"endpoint/{ep_id}")
+
+                cpu_cores = None
+                memory_mb = None
+                inspect = None
+                try:
+                    inspect = self._get(f"/api/endpoints/{ep_id}/docker/containers/{c['Id']}/json")
+                except ConnectorError:
+                    pass
+                if inspect:
+                    host_config = inspect.get("HostConfig", {})
+                    nano_cpus = host_config.get("NanoCpus")
+                    cpu_quota = host_config.get("CpuQuota")
+                    cpu_period = host_config.get("CpuPeriod") or 100000
+                    if nano_cpus:
+                        cpu_cores = round(nano_cpus / 1_000_000_000, 2)
+                    elif cpu_quota and cpu_quota > 0:
+                        cpu_cores = round(cpu_quota / cpu_period, 2)
+                    mem_bytes = host_config.get("Memory")
+                    if mem_bytes:
+                        memory_mb = int(mem_bytes / 1024 / 1024)
+
                 assets.append(
                     DiscoveredAsset(
                         asset_type="docker_container",
                         external_id=f"endpoint/{ep_id}/container/{c['Id']}",
                         name=name,
                         status=c.get("State"),
-                        parent_external_id=f"endpoint/{ep_id}",
-                        raw_data={**c, "_derived_ports": ports},
+                        parent_external_id=parent_external_id,
+                        ip_address=ip,
+                        mac_address=mac,
+                        cpu_cores=cpu_cores,
+                        memory_mb=memory_mb,
+                        initial_ports=self._ports_from_docker(c),
+                        initial_services=_guess_services(c.get("Image")),
+                        raw_data={**c, "inspect": inspect},
                     )
                 )
 

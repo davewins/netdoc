@@ -8,11 +8,21 @@ const ASSET_TYPES = [
   "vm",
   "lxc",
   "docker_host",
+  "docker_stack",
   "docker_container",
   "dns_record",
+  "dhcp_reservation",
   "device",
   "host",
 ];
+
+function formatSpecs(a: Asset): string {
+  const parts: string[] = [];
+  if (a.cpu_cores) parts.push(`${a.cpu_cores} vCPU`);
+  if (a.memory_mb) parts.push(`${(a.memory_mb / 1024).toFixed(1)} GB RAM`);
+  if (a.disk_gb) parts.push(`${a.disk_gb} GB disk`);
+  return parts.join(" · ") || "-";
+}
 
 export default function Inventory() {
   const [params, setParams] = useSearchParams();
@@ -65,6 +75,7 @@ export default function Inventory() {
             <th>Type</th>
             <th>IP</th>
             <th>Status</th>
+            <th>Specs</th>
             <th>Source</th>
             <th>Tags</th>
             <th>Last seen</th>
@@ -77,10 +88,14 @@ export default function Inventory() {
                 <Link className="row-link" to={`/assets/${a.id}`}>
                   {a.name}
                 </Link>
+                {a.linked_assets.length > 0 && (
+                  <span className="muted"> (+{a.linked_assets.length} linked)</span>
+                )}
               </td>
               <td>{a.asset_type}</td>
               <td>{a.ip_address ?? "-"}</td>
               <td>{a.status ?? "-"}</td>
+              <td className="muted">{formatSpecs(a)}</td>
               <td className="muted">{a.source}</td>
               <td>
                 {a.tags.map((t) => (

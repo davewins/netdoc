@@ -14,6 +14,17 @@ class DiscoveredAsset:
     parent_external_id: Optional[str] = None
     raw_data: dict = field(default_factory=dict)
 
+    cpu_cores: Optional[int] = None
+    memory_mb: Optional[int] = None
+    disk_gb: Optional[float] = None
+    uptime_seconds: Optional[int] = None
+
+    # Only applied the first time an asset is discovered, so later manual
+    # edits in the enrichment UI are never clobbered by a re-poll.
+    initial_tags: list = field(default_factory=list)
+    initial_services: list = field(default_factory=list)
+    initial_ports: list = field(default_factory=list)
+
 
 class ConnectorError(Exception):
     pass

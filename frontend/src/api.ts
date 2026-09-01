@@ -1,4 +1,4 @@
-import type { Asset, Connector, CredentialRevealed } from "./types";
+import type { Asset, AssetLink, Connector, CredentialRevealed, Topology } from "./types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
@@ -14,11 +14,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listAssets: (params: { asset_type?: string; connector_id?: number; q?: string } = {}) => {
+  listAssets: (
+    params: { asset_type?: string; connector_id?: number; q?: string; include_merged?: boolean } = {},
+  ) => {
     const qs = new URLSearchParams();
     if (params.asset_type) qs.set("asset_type", params.asset_type);
     if (params.connector_id !== undefined) qs.set("connector_id", String(params.connector_id));
     if (params.q) qs.set("q", params.q);
+    if (params.include_merged) qs.set("include_merged", "true");
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     return request<Asset[]>(`/api/assets${suffix}`);
   },
@@ -45,4 +48,10 @@ export const api = {
   }) => request<Connector>("/api/connectors", { method: "POST", body: JSON.stringify(payload) }),
   deleteConnector: (id: number) => request<void>(`/api/connectors/${id}`, { method: "DELETE" }),
   pollConnectorNow: (id: number) => request<Connector>(`/api/connectors/${id}/poll-now`, { method: "POST" }),
+
+  listLinks: (status: string = "pending") => request<AssetLink[]>(`/api/links?status=${status}`),
+  confirmLink: (id: number) => request<AssetLink>(`/api/links/${id}/confirm`, { method: "POST" }),
+  rejectLink: (id: number) => request<AssetLink>(`/api/links/${id}/reject`, { method: "POST" }),
+
+  getTopology: () => request<Topology>("/api/topology"),
 };

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from . import config, crypto
 from .connectors import ConnectorError, build_connector
+from .correlation import run_correlation
 from .database import SessionLocal
 from .models import Asset, Connector, utcnow
 
@@ -44,6 +45,10 @@ def poll_connector(db: Session, connector: Connector) -> None:
             existing.ip_address = item.ip_address or existing.ip_address
             existing.mac_address = item.mac_address or existing.mac_address
             existing.status = item.status
+            existing.cpu_cores = item.cpu_cores
+            existing.memory_mb = item.memory_mb
+            existing.disk_gb = item.disk_gb
+            existing.uptime_seconds = item.uptime_seconds
             existing.raw_data = item.raw_data
             existing.last_seen_at = utcnow()
             asset = existing
@@ -58,10 +63,14 @@ def poll_connector(db: Session, connector: Connector) -> None:
                 ip_address=item.ip_address,
                 mac_address=item.mac_address,
                 status=item.status,
+                cpu_cores=item.cpu_cores,
+                memory_mb=item.memory_mb,
+                disk_gb=item.disk_gb,
+                uptime_seconds=item.uptime_seconds,
                 raw_data=item.raw_data,
-                tags=[],
-                ports=[],
-                services=[],
+                tags=list(item.initial_tags),
+                ports=list(item.initial_ports),
+                services=list(item.initial_services),
             )
             db.add(asset)
 
@@ -83,6 +92,8 @@ def poll_connector(db: Session, connector: Connector) -> None:
     connector.last_polled_at = utcnow()
     db.commit()
     logger.info("Connector %s (%s) discovered %d assets", connector.name, connector.type, len(discovered))
+
+    run_correlation(db)
 
 
 def poll_all():

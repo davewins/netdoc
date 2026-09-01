@@ -33,12 +33,26 @@ class CredentialRevealed(CredentialOut):
     secret: Optional[str] = None
 
 
+class LinkedAssetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    asset_type: str
+    name: str
+    ip_address: Optional[str] = None
+    mac_address: Optional[str] = None
+    connector_id: Optional[int] = None
+    link_reason: Optional[str] = None
+    link_status: Optional[str] = None
+
+
 class AssetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     connector_id: Optional[int]
     parent_id: Optional[int]
+    canonical_asset_id: Optional[int] = None
     asset_type: str
     external_id: Optional[str]
     source: str
@@ -47,6 +61,10 @@ class AssetOut(BaseModel):
     ip_address: Optional[str]
     mac_address: Optional[str]
     status: Optional[str]
+    cpu_cores: Optional[int] = None
+    memory_mb: Optional[int] = None
+    disk_gb: Optional[float] = None
+    uptime_seconds: Optional[int] = None
     raw_data: Optional[dict] = None
     notes: Optional[str]
     tags: list[str] = []
@@ -56,6 +74,7 @@ class AssetOut(BaseModel):
     last_seen_at: datetime.datetime
     updated_at: datetime.datetime
     credentials: list[CredentialOut] = []
+    linked_assets: list[LinkedAssetOut] = []
 
 
 class AssetEnrichmentIn(BaseModel):
@@ -99,3 +118,44 @@ class ConnectorOut(BaseModel):
     last_polled_at: Optional[datetime.datetime]
     last_error: Optional[str]
     created_at: datetime.datetime
+
+
+class LinkAssetSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    asset_type: str
+    ip_address: Optional[str] = None
+    mac_address: Optional[str] = None
+
+
+class LinkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    reason: str
+    status: str
+    created_at: datetime.datetime
+    primary_asset: LinkAssetSummary
+    secondary_asset: LinkAssetSummary
+
+
+class TopologyNode(BaseModel):
+    id: int
+    name: str
+    asset_type: str
+    status: Optional[str] = None
+    ip_address: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class TopologyEdge(BaseModel):
+    source: int
+    target: int
+    kind: str  # "parent" | "subnet"
+
+
+class TopologyOut(BaseModel):
+    nodes: list[TopologyNode]
+    edges: list[TopologyEdge]

@@ -75,21 +75,64 @@ class PiholeConnector(BaseConnector):
             )
 
         try:
-            config_resp = self._get("/api/config")
-            hosts = config_resp.get("config", {}).get("dns", {}).get("hosts", [])
-            for entry in hosts:
-                parts = entry.split()
-                if len(parts) < 2:
+            config = self._get("/api/config").get("config", {})
+        except ConnectorError:
+            config = {}
+
+        for entry in config.get("dns", {}).get("hosts", []):
+            parts = entry.split()
+            if len(parts) < 2:
+                continue
+            ip, hostname = parts[0], parts[1]
+            assets.append(
+                DiscoveredAsset(
+                    asset_type="dns_record",
+                    external_id=f"host/{hostname}",
+                    name=hostname,
+                    hostname=hostname,
+                    ip_address=ip,
+                    raw_data={"raw_entry": entry},
+                )
+            )
+
+        # Static DHCP reservations - "MAC,IP,hostname[,lease-time]". These are
+        # the strongest link back to Proxmox: a VM's NIC MAC reserved to a
+        # fixed IP here will auto-merge with the Proxmox-discovered VM.
+        for entry in config.get("dhcp", {}).get("hosts", []):
+            parts = entry.split(",")
+            if len(parts) < 2:
+                continue
+            mac, ip = parts[0].strip(), parts[1].strip()
+            hostname = parts[2].strip() if len(parts) > 2 and parts[2].strip() else ip
+            assets.append(
+                DiscoveredAsset(
+                    asset_type="dhcp_reservation",
+                    external_id=f"reservation/{mac}",
+                    name=hostname,
+                    hostname=hostname if hostname != ip else None,
+                    ip_address=ip,
+                    mac_address=mac,
+                    raw_data={"raw_entry": entry},
+                )
+            )
+
+        try:
+            leases_resp = self._get("/api/dhcp/leases")
+            for lease in leases_resp.get("leases", []):
+                mac = lease.get("hwaddr")
+                ip = lease.get("ip")
+                if not mac or not ip:
                     continue
-                ip, hostname = parts[0], parts[1]
                 assets.append(
                     DiscoveredAsset(
-                        asset_type="dns_record",
-                        external_id=f"host/{hostname}",
-                        name=hostname,
-                        hostname=hostname,
+                        asset_type="dhcp_reservation",
+                        external_id=f"lease/{mac}",
+                        name=lease.get("name") or ip,
+                        hostname=lease.get("name"),
                         ip_address=ip,
-                        raw_data={"raw_entry": entry},
+                        mac_address=mac,
+                        status="active-lease",
+                        raw_data=lease,
                     )
                 )
         except ConnectorError:

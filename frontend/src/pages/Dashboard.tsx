@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import type { Asset, Connector } from "../types";
+import type { Asset, AssetLink, Connector } from "../types";
 
 export default function Dashboard() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [pendingLinks, setPendingLinks] = useState<AssetLink[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.listAssets(), api.listConnectors()])
-      .then(([a, c]) => {
+    Promise.all([api.listAssets(), api.listConnectors(), api.listLinks("pending")])
+      .then(([a, c, l]) => {
         setAssets(a);
         setConnectors(c);
+        setPendingLinks(l);
       })
       .catch((e) => setError(String(e)));
   }, []);
@@ -39,6 +41,13 @@ export default function Dashboard() {
         ))}
         {assets.length === 0 && <span className="muted">No assets discovered or added yet.</span>}
       </div>
+
+      {pendingLinks.length > 0 && (
+        <div className="card">
+          {pendingLinks.length} record(s) share an IP with another record and are waiting for you to confirm
+          or reject the match — see <Link to="/links">Link suggestions</Link>.
+        </div>
+      )}
 
       <h2>Connectors</h2>
       <div className="card">

@@ -18,10 +18,22 @@ export interface CredentialRevealed extends Credential {
   secret: string | null;
 }
 
+export interface LinkedAsset {
+  id: number;
+  asset_type: string;
+  name: string;
+  ip_address: string | null;
+  mac_address: string | null;
+  connector_id: number | null;
+  link_reason: string | null;
+  link_status: string | null;
+}
+
 export interface Asset {
   id: number;
   connector_id: number | null;
   parent_id: number | null;
+  canonical_asset_id: number | null;
   asset_type: string;
   external_id: string | null;
   source: "discovered" | "manual";
@@ -30,6 +42,10 @@ export interface Asset {
   ip_address: string | null;
   mac_address: string | null;
   status: string | null;
+  cpu_cores: number | null;
+  memory_mb: number | null;
+  disk_gb: number | null;
+  uptime_seconds: number | null;
   raw_data: Record<string, unknown> | null;
   notes: string | null;
   tags: string[];
@@ -39,6 +55,7 @@ export interface Asset {
   last_seen_at: string;
   updated_at: string;
   credentials: Credential[];
+  linked_assets: LinkedAsset[];
 }
 
 export interface Connector {
@@ -52,4 +69,41 @@ export interface Connector {
   last_polled_at: string | null;
   last_error: string | null;
   created_at: string;
+}
+
+export interface LinkAssetSummary {
+  id: number;
+  name: string;
+  asset_type: string;
+  ip_address: string | null;
+  mac_address: string | null;
+}
+
+export interface AssetLink {
+  id: number;
+  reason: "mac" | "ip";
+  status: "pending" | "confirmed" | "rejected";
+  created_at: string;
+  primary_asset: LinkAssetSummary;
+  secondary_asset: LinkAssetSummary;
+}
+
+export interface TopologyNode {
+  id: number;
+  name: string;
+  asset_type: string;
+  status: string | null;
+  ip_address: string | null;
+  parent_id: number | null;
+}
+
+export interface TopologyEdge {
+  source: number;
+  target: number;
+  kind: string;
+}
+
+export interface Topology {
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
 }
