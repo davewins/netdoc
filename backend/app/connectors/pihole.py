@@ -103,7 +103,10 @@ class PiholeConnector(BaseConnector):
             if len(parts) < 2:
                 continue
             mac, ip = parts[0].strip(), parts[1].strip()
-            hostname = parts[2].strip() if len(parts) > 2 and parts[2].strip() else ip
+            raw_hostname = parts[2].strip() if len(parts) > 2 else ""
+            # Pi-hole writes a literal "*" placeholder when no hostname is set
+            # (it still needs the field position for an optional lease-time after it).
+            hostname = raw_hostname if raw_hostname and raw_hostname != "*" else ip
             assets.append(
                 DiscoveredAsset(
                     asset_type="dhcp_reservation",
