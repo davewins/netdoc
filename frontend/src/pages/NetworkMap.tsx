@@ -43,6 +43,94 @@ function siteRingColor(site: string): string {
   return SITE_RING_COLORS[Math.abs(hash) % SITE_RING_COLORS.length];
 }
 
+// Color for the implicit group of assets whose connector has no site set -
+// i.e. the "main" network, shown alongside any tagged remote sites.
+const LOCAL_GROUP_COLOR = "#64748b";
+const LOCAL_GROUP_KEY = "__local__";
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Andrew's monotone chain convex hull, used to trace a boundary around a
+// site's node positions so the group reads as a region rather than just a
+// scattering of colored rings.
+function convexHull(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: { x: number; y: number }[] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: { x: number; y: number }[] = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  const hull = lower.concat(upper);
+  // Degenerate input (a single point, or every point coincident) collapses
+  // to zero or one hull vertex - the caller falls back to drawing a circle.
+  return hull.length > 0 ? hull : pts.slice(0, 1);
+}
+
+// Draws a soft padded region behind one site's (or the local group's) nodes,
+// re-run every frame from live physics positions via the "beforeDrawing"
+// hook below - so the boundary tracks the cluster as it settles rather than
+// being a one-off snapshot.
+function drawGroupBoundary(
+  ctx: CanvasRenderingContext2D,
+  points: { x: number; y: number }[],
+  fillColor: string,
+  strokeColor: string,
+  labelColor: string,
+  label: string,
+) {
+  if (points.length === 0) return;
+  const hull = convexHull(points);
+  ctx.save();
+  if (hull.length <= 1) {
+    const c = points[0];
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 80, 0, Math.PI * 2);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(hull[0].x, hull[0].y);
+    for (let i = 1; i < hull.length; i++) ctx.lineTo(hull[i].x, hull[i].y);
+    ctx.closePath();
+    // A thick, round-jointed stroke along the hull expands it outward into
+    // a padded blob (round caps turn even a 2-point hull into a capsule)
+    // before the crisp fill/stroke pass below.
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 90;
+    ctx.strokeStyle = fillColor;
+    ctx.stroke();
+  }
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = strokeColor;
+  ctx.stroke();
+  ctx.restore();
+
+  const minY = Math.min(...points.map((p) => p.y));
+  const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
+  ctx.save();
+  ctx.fillStyle = labelColor;
+  ctx.font = "bold 14px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(label, cx, minY - (hull.length <= 1 ? 100 : 70));
+  ctx.restore();
+}
+
 const REFRESH_MS = 15000;
 
 function ShapeSwatch({ shape, color }: { shape: string; color: string }) {
@@ -77,6 +165,8 @@ export default function NetworkMap() {
   const networkRef = useRef<Network | null>(null);
   const nodesRef = useRef(new DataSet<any>());
   const edgesRef = useRef(new DataSet<any>());
+  const groupsForDrawRef = useRef(new Map<string, { label: string; color: string; ids: number[] }>());
+  const knownNodeIdsRef = useRef(new Set<unknown>());
   const navigate = useNavigate();
   const { theme } = useTheme();
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -95,7 +185,12 @@ export default function NetworkMap() {
       containerRef.current,
       { nodes: nodesRef.current, edges: edgesRef.current },
       {
-        physics: { stabilization: true, barnesHut: { springLength: 120 } },
+        // Higher-than-default damping so the simulation bleeds off energy
+        // faster - with hundreds of nodes pulled toward a shared site
+        // anchor (see refresh() below), the default damping let the system
+        // oscillate for a very long time before crossing vis-network's
+        // "stopped" velocity threshold, which read as constant drift.
+        physics: { stabilization: true, barnesHut: { springLength: 120, damping: 0.35 } },
         interaction: { hover: true },
         nodes: { font: { color: initialColors.font }, borderWidth: 1 },
         edges: { color: initialColors.edge, smooth: { type: "dynamic", enabled: true, roundness: 0.5 } },
@@ -103,13 +198,45 @@ export default function NetworkMap() {
     );
     networkRef.current = network;
     network.on("doubleClick", (params) => {
-      if (params.nodes.length > 0) navigate(`/assets/${params.nodes[0]}`);
+      // Site anchors are pseudo-nodes with string ids (see refresh() below);
+      // real assets keep the numeric ids the backend gave them.
+      if (params.nodes.length > 0 && typeof params.nodes[0] === "number") {
+        navigate(`/assets/${params.nodes[0]}`);
+      }
     });
-    // Fires whenever physics settles - on first load, and again after any
-    // refresh adds/moves nodes. Fitting here (rather than on a guessed
-    // delay) means the bounding box always reflects final positions, not
-    // a mid-simulation snapshot.
-    network.on("stabilizationIterationsDone", () => network.fit({ animation: true }));
+    // Drawn underneath nodes/edges every frame - so a site's boundary
+    // tracks its cluster live as physics settles, rather than being fixed
+    // from a single snapshot.
+    network.on("beforeDrawing", (ctx: CanvasRenderingContext2D) => {
+      for (const { label, color, ids } of groupsForDrawRef.current.values()) {
+        if (ids.length === 0) continue;
+        const positions = network.getPositions(ids);
+        const points = ids.map((id) => positions[id]).filter((p): p is { x: number; y: number } => !!p);
+        if (points.length === 0) continue;
+        drawGroupBoundary(ctx, points, hexToRgba(color, 0.12), hexToRgba(color, 0.55), hexToRgba(color, 0.9), label);
+      }
+    });
+    // Fires once physics has settled below its velocity threshold - on
+    // first load, and again after refresh() briefly re-enables physics for
+    // newly-added nodes (see below). Freezing physics here (rather than
+    // leaving it running indefinitely) is what stops the graph visibly
+    // drifting forever: with hundreds of nodes on one site anchor, the
+    // system can spend a very long time making imperceptibly small
+    // adjustments without ever crossing vis-network's "stopped" threshold,
+    // which reads as constant jitter with nothing wrong to fix.
+    network.on("stabilizationIterationsDone", () => {
+      network.fit({ animation: true });
+      network.setOptions({ physics: false });
+    });
+    // Belt-and-braces: if physics never settles quickly enough for the
+    // event above to fire (large/uneven groups can take a while), still
+    // frame the graph and freeze it after a bounded wait, so the user never
+    // has to manually zoom out to find nodes that only look "missing"
+    // because the view stayed at its initial framing near the origin.
+    const stabilizeFallback = setTimeout(() => {
+      network.fit({ animation: true });
+      network.setOptions({ physics: false });
+    }, 4000);
 
     // vis-network can size its canvas from the container's layout-in-
     // progress dimensions if it initializes before the flex layout
@@ -125,7 +252,7 @@ export default function NetworkMap() {
     async function refresh() {
       try {
         const topo = await api.getTopology();
-        const nodeData = topo.nodes.map((n) => {
+        const nodeData: any[] = topo.nodes.map((n) => {
           const style = TYPE_STYLE[n.asset_type] ?? DEFAULT_STYLE;
           const label = n.ip_address ? `${n.name}\n${n.ip_address}` : n.name;
           const border = n.site ? siteRingColor(n.site) : style.color;
@@ -139,7 +266,77 @@ export default function NetworkMap() {
           };
         });
         setSites([...new Set(topo.nodes.map((n) => n.site).filter((s): s is string => !!s))].sort());
-        const edgeData = topo.edges.map((e) => ({ id: `${e.source}-${e.target}`, from: e.source, to: e.target }));
+        const edgeData: any[] = topo.edges.map((e) => ({ id: `${e.source}-${e.target}`, from: e.source, to: e.target }));
+
+        // Group nodes by site (untagged assets fall into one implicit
+        // "local network" group) so same-site devices can be pulled into
+        // their own spatial cluster instead of blending into one mass.
+        const groupMap = new Map<string, { label: string; color: string; ids: number[] }>();
+        for (const n of topo.nodes) {
+          const key = n.site ?? LOCAL_GROUP_KEY;
+          let group = groupMap.get(key);
+          if (!group) {
+            group = { label: n.site ?? "Local network", color: n.site ? siteRingColor(n.site) : LOCAL_GROUP_COLOR, ids: [] };
+            groupMap.set(key, group);
+          }
+          group.ids.push(n.id);
+        }
+        // Only worth clustering/drawing boundaries once there's more than
+        // one group - otherwise every device is "local" and this would just
+        // wrap the whole graph in a single pointless region.
+        const groupKeys = [...groupMap.keys()].sort((a, b) =>
+          a === LOCAL_GROUP_KEY ? -1 : b === LOCAL_GROUP_KEY ? 1 : a.localeCompare(b),
+        );
+        const multiGroup = groupKeys.length > 1;
+        groupsForDrawRef.current = multiGroup ? groupMap : new Map();
+
+        if (multiGroup) {
+          // Only tagged-site groups get pulled toward a fixed anchor - the
+          // untagged "local network" group (almost always the large
+          // majority of devices) is left with no anchor at all and keeps
+          // settling exactly as it always did. Anchoring that big group too
+          // was the earlier bug: forcing hundreds of mutually-repelling
+          // nodes to also relocate around one fixed point fights Barnes-Hut
+          // repulsion hard enough that it barely settles, and inflates the
+          // separation radius needed to a huge value. A handful of remote-
+          // site devices pulling gently to one side is a far smaller, far
+          // more stable perturbation, and still gives every future site its
+          // own anchor automatically.
+          const siteGroupKeys = groupKeys.filter((k) => k !== LOCAL_GROUP_KEY);
+          const localCount = groupMap.get(LOCAL_GROUP_KEY)?.ids.length ?? 0;
+          // Distance has to clear how far the untouched local mass is likely
+          // to spread on its own (roughly sqrt(n) under Barnes-Hut) so a
+          // site's anchor doesn't end up inside it.
+          const radius = Math.max(700, Math.sqrt(localCount) * 60) + siteGroupKeys.length * 150;
+          siteGroupKeys.forEach((key, i) => {
+            const angle = (i / siteGroupKeys.length) * 2 * Math.PI;
+            const anchorId = `anchor:${key}`;
+            nodeData.push({
+              id: anchorId,
+              x: Math.round(Math.cos(angle) * radius),
+              y: Math.round(Math.sin(angle) * radius),
+              fixed: { x: true, y: true },
+              physics: false,
+              size: 1,
+              shape: "dot",
+              color: { background: "rgba(0,0,0,0)", border: "rgba(0,0,0,0)" },
+              font: { color: "rgba(0,0,0,0)" },
+              label: "",
+            });
+            const length = Math.max(60, Math.sqrt(groupMap.get(key)!.ids.length) * 25);
+            for (const memberId of groupMap.get(key)!.ids) {
+              edgeData.push({
+                id: `anchor:${memberId}`,
+                from: memberId,
+                to: anchorId,
+                hidden: true,
+                physics: true,
+                length,
+                smooth: false,
+              });
+            }
+          });
+        }
 
         // Upsert rather than clear+add, so nodes that already exist keep the
         // position physics settled them into instead of re-simulating the
@@ -156,6 +353,17 @@ export default function NetworkMap() {
         }
         edgesRef.current.update(edgeData);
 
+        // Physics is frozen once the graph settles (see
+        // stabilizationIterationsDone above) so existing nodes stay put
+        // between refreshes instead of drifting forever. Briefly turning it
+        // back on only when a refresh actually introduces a node id we
+        // haven't seen before (a new device, or a newly-appeared site's
+        // anchor) lets that new arrival find its place without disturbing
+        // everything else at every 15s poll.
+        const hasNewNodes = [...keepNodeIds].some((id) => !knownNodeIdsRef.current.has(id));
+        knownNodeIdsRef.current = keepNodeIds;
+        if (hasNewNodes) network.setOptions({ physics: true });
+
         setLastUpdated(new Date());
         setError(null);
       } catch (e) {
@@ -167,6 +375,7 @@ export default function NetworkMap() {
     const interval = setInterval(refresh, REFRESH_MS);
     return () => {
       clearInterval(interval);
+      clearTimeout(stabilizeFallback);
       resizeObserver.disconnect();
       network.destroy();
     };
@@ -205,7 +414,7 @@ export default function NetworkMap() {
       {sites.length > 0 && (
         <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: "20px 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <span className="muted">Colored ring = remote site:</span>
+            <span className="muted">Colored ring & shaded region = site (grouped separately from the main network):</span>
           </div>
           {sites.map((s) => (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
