@@ -97,6 +97,49 @@ with a legend below the graph for the shape/color per type and (if any
 connector has a site set) the ring color per site. Double-click a node to
 open its detail page.
 
+## Report
+
+A generated-on-demand narrative summary of the current network state -
+inventory totals by type and site, connectors currently failing to poll,
+assets reporting a down/stopped/offline-ish status, and any pending link
+suggestions. Nothing is stored or scheduled; it's recomputed from the
+database every time you open the page or hit "Regenerate". The same
+content is available to an MCP client via the `get_network_report` tool
+below.
+
+## MCP server (querying from Claude)
+
+netdoc exposes a Model Context Protocol server at `/mcp` (Streamable HTTP)
+so a Claude client can query and lightly act on your inventory directly -
+list/search assets, get an asset's full detail, get the topology graph,
+list connectors, get the report above, trigger an immediate connector
+poll, or confirm/reject a pending link suggestion. Credential data is
+never exposed through this server, and neither is creating, editing, or
+deleting an asset or connector - use the web UI for those.
+
+The rest of netdoc's API has no authentication at all, which is fine for
+a UI that's only ever hit from a trusted LAN - but `/mcp` is meant to be
+reachable more broadly (any MCP client, any machine on the network), so
+it's gated behind a single shared bearer token. The token is generated on
+first run and persisted at `/data/mcp_token` inside the data volume (or
+set explicitly via the `NETDOC_MCP_TOKEN` environment variable); find it
+with:
+
+```bash
+docker exec netdoc cat /data/mcp_token
+```
+
+Then point an MCP client at `http://<host>:<port>/mcp/` with that token as
+a bearer `Authorization` header - for example, with Claude Code:
+
+```bash
+claude mcp add --transport http netdoc http://<host>:<port>/mcp/ \
+  --header "Authorization: Bearer <token>"
+```
+
+(Keep the trailing slash - `/mcp` without one 307-redirects to `/mcp/`,
+which most clients follow automatically, but not all do.)
+
 ## Running it
 
 ```bash

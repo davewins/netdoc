@@ -118,3 +118,32 @@ export interface Topology {
   nodes: TopologyNode[];
   edges: TopologyEdge[];
 }
+
+export interface ReportConnectorSummary {
+  id: number;
+  name: string;
+  type: string;
+  site: string | null;
+  enabled: boolean;
+  last_polled_at: string | null;
+  last_error: string | null;
+}
+
+export interface ReportAssetSummary {
+  id: number;
+  name: string;
+  asset_type: string;
+  status: string | null;
+  site: string | null;
+}
+
+export interface Report {
+  generated_at: string;
+  total_assets: number;
+  by_type: Record<string, number>;
+  by_site: Record<string, number>;
+  connectors: ReportConnectorSummary[];
+  down_assets: ReportAssetSummary[];
+  pending_link_count: number;
+  narrative: string[];
+}

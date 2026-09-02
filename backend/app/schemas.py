@@ -173,3 +173,32 @@ class TopologyEdge(BaseModel):
 class TopologyOut(BaseModel):
     nodes: list[TopologyNode]
     edges: list[TopologyEdge]
+
+
+class ReportConnectorSummary(BaseModel):
+    id: int
+    name: str
+    type: str
+    site: Optional[str] = None
+    enabled: bool
+    last_polled_at: Optional[datetime.datetime] = None
+    last_error: Optional[str] = None
+
+
+class ReportAssetSummary(BaseModel):
+    id: int
+    name: str
+    asset_type: str
+    status: Optional[str] = None
+    site: Optional[str] = None
+
+
+class ReportOut(BaseModel):
+    generated_at: datetime.datetime
+    total_assets: int
+    by_type: dict[str, int]
+    by_site: dict[str, int]
+    connectors: list[ReportConnectorSummary]
+    down_assets: list[ReportAssetSummary]
+    pending_link_count: int
+    narrative: list[str]

@@ -5,7 +5,17 @@ import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Links from "./pages/Links";
 import NetworkMap from "./pages/NetworkMap";
-import { ConnectorsIcon, DashboardIcon, InventoryIcon, LinksIcon, MoonIcon, NetworkMapIcon, SunIcon } from "./icons";
+import ReportPage from "./pages/Report";
+import {
+  ConnectorsIcon,
+  DashboardIcon,
+  InventoryIcon,
+  LinksIcon,
+  MoonIcon,
+  NetworkMapIcon,
+  ReportIcon,
+  SunIcon,
+} from "./icons";
 import { ThemeProvider, useTheme } from "./theme";
 
 function ThemeToggle() {
@@ -42,6 +52,9 @@ export default function App() {
           <NavLink to="/connectors">
             <ConnectorsIcon /> Connectors
           </NavLink>
+          <NavLink to="/report">
+            <ReportIcon /> Report
+          </NavLink>
           <div className="sidebar-spacer" />
           <ThemeToggle />
         </nav>
@@ -53,6 +66,7 @@ export default function App() {
             <Route path="/network-map" element={<NetworkMap />} />
             <Route path="/links" element={<Links />} />
             <Route path="/connectors" element={<Connectors />} />
+            <Route path="/report" element={<ReportPage />} />
           </Routes>
         </main>
       </div>

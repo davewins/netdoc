@@ -1,4 +1,4 @@
-import type { Asset, AssetLink, Connector, CredentialRevealed, Topology } from "./types";
+import type { Asset, AssetLink, Connector, CredentialRevealed, Report, Topology } from "./types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
@@ -74,4 +74,6 @@ export const api = {
   rejectLink: (id: number) => request<AssetLink>(`/api/links/${id}/reject`, { method: "POST" }),
 
   getTopology: () => request<Topology>("/api/topology"),
+
+  getReport: () => request<Report>("/api/report"),
 };
