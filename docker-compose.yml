@@ -1,3 +1,9 @@
+# Pinned rather than left to default to the checkout directory's basename -
+# multiple clones of this repo (e.g. one per OS user) should all resolve to
+# the same "netdoc" project name and therefore the same container/volume,
+# regardless of what directory each one lives in.
+name: netdoc
+
 services:
   netdoc:
     build: .
