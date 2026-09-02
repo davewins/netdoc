@@ -126,12 +126,17 @@ class PiholeConnector(BaseConnector):
                 ip = lease.get("ip")
                 if not mac or not ip:
                     continue
+                # dnsmasq's lease file (and Pi-hole's API mirroring it) uses a literal
+                # "*" placeholder when the client didn't send a hostname.
+                lease_name = lease.get("name")
+                if lease_name == "*":
+                    lease_name = None
                 assets.append(
                     DiscoveredAsset(
                         asset_type="dhcp_reservation",
                         external_id=f"lease/{mac}",
-                        name=lease.get("name") or ip,
-                        hostname=lease.get("name"),
+                        name=lease_name or ip,
+                        hostname=lease_name,
                         ip_address=ip,
                         mac_address=mac,
                         status="active-lease",
