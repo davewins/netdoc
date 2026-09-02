@@ -9,3 +9,4 @@ frontend/dist/
 frontend/tsconfig.tsbuildinfo
 
 .DS_Store
+.env

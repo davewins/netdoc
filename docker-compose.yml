@@ -17,6 +17,11 @@ services:
     environment:
       # Poll every 5 minutes by default.
       NETDOC_POLL_INTERVAL_SECONDS: "300"
+      # With network_mode: host, this binds directly to a port on the
+      # host itself (not an isolated bridge network) - override via a
+      # NETDOC_PORT=xxxx env var (or a .env file next to this compose
+      # file, gitignored) if 8000 is already taken on this host.
+      NETDOC_PORT: "${NETDOC_PORT:-8000}"
       # Optional: pin the encryption key instead of letting netdoc generate
       # and persist one at /data/master.key on first run. If you set this,
       # back it up - losing it makes stored credentials unrecoverable.
