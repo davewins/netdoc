@@ -48,7 +48,18 @@ class NetworkScanConnector(BaseConnector):
         if not self.cidr:
             raise ConnectorError("Network scan connector requires a CIDR range (set as its base URL)")
 
-        # Pass 1: who's alive + their MAC (needs host networking for ARP).
+        # Pass 1: who's alive + their MAC. On the local subnet this is ARP
+        # (needs host networking) and finds everyone reliably. Across a
+        # routed link (e.g. a site-to-site WireGuard tunnel to a second
+        # site) ARP is impossible - there's no L2 to ARP on - so this falls
+        # back to nmap's default handful of discovery probes (ICMP echo,
+        # a SYN to 443, an ACK to 80, ...), which plenty of real devices
+        # simply don't answer even though they're up. That under-detection
+        # is a real limitation of ping-sweep discovery over a tunnel, not
+        # fixable here - but pass 2 below (a real port scan of the whole
+        # range, not just who pass 1 already found) gives every host a
+        # second chance via more ports, and used to be discarded for
+        # anyone pass 1 missed. It no longer is.
         discovery_root = self._run_nmap(["-sn"])
         hosts_by_ip: dict[str, dict] = {}
         for host in discovery_root.findall("host"):
@@ -64,22 +75,29 @@ class NetworkScanConnector(BaseConnector):
             hostname = hostname_el.get("name") if hostname_el is not None else None
             hosts_by_ip[ip] = {"mac": mac, "vendor": vendor, "hostname": hostname, "ports": []}
 
-        if not hosts_by_ip:
-            return []
-
-        # Pass 2: a light top-ports scan of whatever answered, for context
-        # (e.g. "this thing has 8006 open" hints Proxmox even if no
-        # connector has claimed it yet).
+        # Pass 2: a light top-ports scan of the *whole* range with -Pn
+        # (don't skip anyone just because pass 1 didn't hear back). Besides
+        # giving context on what's running (e.g. "this thing has 8006
+        # open" hints Proxmox even if no connector has claimed it yet),
+        # any response here - open OR closed, i.e. something actually
+        # answered rather than the probe vanishing into a firewall - is
+        # itself independent evidence of a live host, worth keeping even
+        # when pass 1's ping sweep missed it entirely.
         try:
             port_root = self._run_nmap(["-Pn", "-T4", f"-p{COMMON_PORTS}"])
             for host in port_root.findall("host"):
                 addrs = host.findall("address")
                 ip = next((a.get("addr") for a in addrs if a.get("addrtype") == "ipv4"), None)
-                if ip not in hosts_by_ip:
+                if not ip:
                     continue
-                for port in host.findall("ports/port"):
-                    state = port.find("state")
-                    if state is None or state.get("state") != "open":
+                ports = [p for p in host.findall("ports/port") if p.find("state") is not None]
+                responded = [p for p in ports if p.find("state").get("state") in ("open", "closed")]
+                if ip not in hosts_by_ip:
+                    if not responded:
+                        continue  # never seen, and nothing here answered either - not a live host
+                    hosts_by_ip[ip] = {"mac": None, "vendor": None, "hostname": None, "ports": []}
+                for port in responded:
+                    if port.find("state").get("state") != "open":
                         continue
                     service = port.find("service")
                     hosts_by_ip[ip]["ports"].append(
@@ -91,6 +109,9 @@ class NetworkScanConnector(BaseConnector):
                     )
         except ConnectorError:
             pass  # port scan is best-effort; host discovery above still stands
+
+        if not hosts_by_ip:
+            return []
 
         assets = []
         for ip, info in hosts_by_ip.items():

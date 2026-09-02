@@ -46,6 +46,15 @@ class LinkedAssetOut(BaseModel):
     link_status: Optional[str] = None
 
 
+class ChildAssetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    asset_type: str
+    name: str
+    status: Optional[str] = None
+
+
 class AssetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -61,6 +70,7 @@ class AssetOut(BaseModel):
     ip_address: Optional[str]
     mac_address: Optional[str]
     status: Optional[str]
+    site: Optional[str] = None
     cpu_cores: Optional[int] = None
     memory_mb: Optional[int] = None
     disk_gb: Optional[float] = None
@@ -75,6 +85,7 @@ class AssetOut(BaseModel):
     updated_at: datetime.datetime
     credentials: list[CredentialOut] = []
     linked_assets: list[LinkedAssetOut] = []
+    children: list[ChildAssetOut] = []
 
 
 class AssetEnrichmentIn(BaseModel):
@@ -102,6 +113,7 @@ class ConnectorIn(BaseModel):
     verify_ssl: bool = False
     enabled: bool = True
     poll_interval_seconds: Optional[int] = None
+    site: Optional[str] = None
     credentials: dict[str, Any] = {}
 
 
@@ -115,6 +127,7 @@ class ConnectorOut(BaseModel):
     verify_ssl: bool
     enabled: bool
     poll_interval_seconds: Optional[int]
+    site: Optional[str] = None
     last_polled_at: Optional[datetime.datetime]
     last_error: Optional[str]
     created_at: datetime.datetime
@@ -147,6 +160,7 @@ class TopologyNode(BaseModel):
     asset_type: str
     status: Optional[str] = None
     ip_address: Optional[str] = None
+    site: Optional[str] = None
     parent_id: Optional[int] = None
 
 

@@ -29,6 +29,11 @@ class Connector(Base):
     name = Column(String, nullable=False)
     base_url = Column(String, nullable=False)
     verify_ssl = Column(Boolean, default=False)
+    # Free-text label for which physical location this connector talks to
+    # (e.g. "Teignmouth") - unset for your main/local network. Purely
+    # organizational: every asset discovered through this connector
+    # inherits it (see Asset.site below), nothing else treats it specially.
+    site = Column(String, nullable=True)
     encrypted_credentials = Column(Text)  # JSON blob, encrypted as a whole
     enabled = Column(Boolean, default=True)
     poll_interval_seconds = Column(Integer, nullable=True)
@@ -79,6 +84,11 @@ class Asset(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     connector = relationship("Connector", back_populates="assets")
+
+    @property
+    def site(self) -> str | None:
+        return self.connector.site if self.connector else None
+
     parent = relationship("Asset", remote_side=[id], foreign_keys=[parent_id], backref="children")
     canonical_asset = relationship(
         "Asset", remote_side=[id], foreign_keys=[canonical_asset_id], backref="merged_assets"

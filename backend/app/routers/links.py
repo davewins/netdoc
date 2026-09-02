@@ -29,6 +29,7 @@ def confirm_link(link_id: int, db: Session = Depends(get_db)):
     secondary.canonical_asset_id = link.primary_asset_id
     primary.ip_address = primary.ip_address or secondary.ip_address
     primary.hostname = primary.hostname or secondary.hostname
+    primary.status = primary.status or secondary.status
     db.commit()
     db.refresh(link)
     return link

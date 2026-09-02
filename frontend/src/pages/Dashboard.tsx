@@ -22,6 +22,9 @@ export default function Dashboard() {
   const counts: Record<string, number> = {};
   for (const a of assets) counts[a.asset_type] = (counts[a.asset_type] ?? 0) + 1;
 
+  const siteCounts: Record<string, number> = {};
+  for (const a of assets) if (a.site) siteCounts[a.site] = (siteCounts[a.site] ?? 0) + 1;
+
   const failingConnectors = connectors.filter((c) => c.last_error);
 
   return (
@@ -41,6 +44,26 @@ export default function Dashboard() {
         ))}
         {assets.length === 0 && <span className="muted">No assets discovered or added yet.</span>}
       </div>
+
+      {Object.keys(siteCounts).length > 0 && (
+        <>
+          <h2>Other sites</h2>
+          <p className="muted">
+            Assets discovered through a connector tagged with a site (see Connectors) - everything else is
+            on your main network.
+          </p>
+          <div className="grid">
+            {Object.entries(siteCounts).map(([s, count]) => (
+              <Link key={s} to={`/inventory?site=${encodeURIComponent(s)}`} className="row-link">
+                <div className="stat">
+                  <div className="value">{count}</div>
+                  <div className="label">{s}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       {pendingLinks.length > 0 && (
         <div className="card">

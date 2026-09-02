@@ -39,13 +39,21 @@ TYPE_PRIORITY = {
     "vm": 100,
     "lxc": 100,
     "docker_container": 90,
+    "k8s_pod": 90,
     "docker_stack": 85,
     "docker_host": 80,
     "proxmox_node": 80,
+    "k8s_node": 80,
     "dhcp_reservation": 60,
     "dns_record": 50,
     "device": 40,
+    "wireguard_peer": 40,
+    "ha_device": 40,
+    "ha_entity": 35,
     "host": 30,
+    # Purely an external observer of another asset's status, never a thing
+    # in its own right - should never win canonical selection.
+    "uptime_monitor": 10,
 }
 
 
@@ -112,6 +120,7 @@ def run_correlation(db: Session) -> None:
             # until a DHCP reservation or scan tells us one.
             canonical.ip_address = canonical.ip_address or root.ip_address
             canonical.hostname = canonical.hostname or root.hostname
+            canonical.status = canonical.status or root.status
             existing = _find_link(db, canonical.id, root.id)
             if existing:
                 existing.status = "confirmed"

@@ -25,6 +25,28 @@ API endpoints, never changes anything on Proxmox/Portainer/Pi-hole.
   to a Proxmox VM's NIC)
 - **Network scan (nmap)**: ARP/ping sweep of a CIDR range plus a light
   port scan, for anything the above don't know about
+- **Home Assistant**: entities from device-ish domains (lights, switches,
+  climate, cameras, locks, covers, fans, media players, vacuums, device
+  trackers), plus anything else that happens to expose an IP/MAC. Grouped
+  under one `ha_device` asset per physical device (a WLED strip's light +
+  5 helper switches, a smart display's backlight + relays, ...) - fetched
+  via a `/api/template` call, since the REST API's `/api/states` alone has
+  no notion of "device". An entity that belongs to a device is hidden from
+  Inventory/the network map by default (it's a sub-component, not its own
+  thing) but still reachable from its device's page, or via search
+- **Kubernetes**: nodes (with real IP, so a node usually auto-merges with
+  its already-discovered Proxmox VM) and pods, grouped under their node
+- **Uptime Kuma**: doesn't discover new hosts - backfills the `status`
+  field on assets discovered elsewhere, via its Prometheus metrics
+  endpoint. Each monitor becomes its own low-priority asset that links up
+  with an existing one by IP (resolved from the monitor's hostname where
+  needed); confirming that link in **Link suggestions** is what applies
+  the backfill
+- **WireGuard (wg-easy)**: VPN peers/clients - name, tunnel IP, and a
+  connected/disconnected/disabled status derived from the last handshake
+  time. Talks to wg-easy's web UI backend (WireGuard itself has no API)
+  - targets the v14+ Nuxt-based rewrite; the older pre-v14 build isn't
+  supported
 - **Everything else** (plain Linux hosts, smart devices, anything without
   an API): add manually in Inventory, then enrich it the same way as
   discovered assets
@@ -41,25 +63,39 @@ automatically:
 
 - **Same MAC address → merged automatically.** MACs don't get reassigned,
   so these are treated as certain. The record from the more authoritative
-  source (a VM/container beats a passively-observed DNS/DHCP/scan entry)
-  becomes the one shown in Inventory, and inherits any IP/hostname the
-  merged-in records knew that it didn't.
+  source (a VM/container beats a passively-observed DNS/DHCP/scan entry,
+  which beats a pure external observer like an Uptime Kuma monitor)
+  becomes the one shown in Inventory, and inherits any IP/hostname/status
+  the merged-in records knew that it didn't.
 - **Same IP address only → suggested, not merged.** DHCP can reassign an
   IP, and several hostnames legitimately sharing one reverse-proxy IP
   isn't the same as being one host - so these show up in **Link
   suggestions** for you to confirm or reject (bulk actions available when
   one record shares an IP with many others, e.g. every subdomain behind
-  one reverse proxy).
+  one reverse proxy). Confirming applies the same ip/hostname/status
+  backfill as an automatic MAC merge does.
 
 Merged/confirmed records show up as one entry in Inventory with an "Also
 known as" section on its detail page; Inventory's own counts and the
 **Network map** only count each host once.
 
+## Sites
+
+Give a connector a "Site" (in Connectors, e.g. "Teignmouth") if it talks
+to a second physical location rather than your main network - every asset
+it discovers inherits that label. Inventory can filter by it, Dashboard
+gets an "Other sites" breakdown, and Network map draws a colored ring
+around that site's nodes (see the map's own legend for which color is
+which). Leave it blank for connectors on your main network - there's no
+special "home site" label, just the absence of one.
+
 ## Network map
 
 A live, auto-refreshing diagram of everything in Inventory (grouped
-Proxmox node → VM/LXC and Docker host/stack → container), styled by type.
-Double-click a node to open its detail page.
+Proxmox node → VM/LXC and Docker host/stack → container), styled by type,
+with a legend below the graph for the shape/color per type and (if any
+connector has a site set) the ring color per site. Double-click a node to
+open its detail page.
 
 ## Running it
 
@@ -111,6 +147,47 @@ use a username/password.
 
 **Network scan** - just a CIDR range (entered as the connector's "base
 URL" field), no credentials. Requires host networking (see above).
+
+**Home Assistant** - Profile (click your name, bottom left) > Security >
+Long-Lived Access Tokens > Create Token.
+
+**Kubernetes** - create a read-only service account and grab its token:
+```bash
+kubectl create serviceaccount netdoc -n default
+kubectl create clusterrolebinding netdoc-view --clusterrole=view --serviceaccount=default:netdoc
+kubectl create token netdoc -n default
+```
+Point the connector at the cluster's API server (`kubectl cluster-info`).
+Self-signed cluster CAs are normal - leave "Verify TLS certificate" off
+unless you've supplied that CA to the container.
+
+**Uptime Kuma** - enable "Expose Prometheus Metrics" in Settings, then use
+an API key (Settings > API Keys) or your login username/password.
+
+**WireGuard (wg-easy)** - use the username/password you log into its web
+UI with.
+
+### Reaching a second site over an existing tunnel
+
+If the netdoc host already has a route to a remote network (e.g. a
+site-to-site WireGuard tunnel to another location), connectors work
+against it exactly like the local LAN - `network_mode: host` means netdoc
+shares the host's full routing table, tunnel interfaces included. Point a
+second Proxmox/Portainer/Pi-hole connector at that site's own instance, or
+add another network-scan connector with its CIDR (e.g. `10.20.0.0/24`),
+the same way you'd run two of any connector type for two separate sites.
+One caveat specific to network-scan: its host-discovery pass relies on
+ARP, which only works on the local broadcast segment - across a routed
+tunnel there's no L2 to ARP on at all, so it falls back to ping/TCP
+probes. Remote hosts are still found, just without a MAC address (and
+therefore without the "same MAC → auto-merge" correlation that local scan
+hits get) - and if a remote device doesn't answer ICMP or any of the
+scanned ports, it won't be found at all, no matter how the connector is
+tuned. If a remote scan finds far fewer devices than you expect, it's
+worth checking from the remote end: is the tunnel peer actually routing/
+NATing to the rest of that LAN (IP forwarding enabled, the peer's
+AllowedIPs covers the whole subnet, not just its own tunnel address), or
+is it only reachable itself.
 
 ## Local development
 

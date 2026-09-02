@@ -24,6 +24,7 @@ def create_connector(payload: schemas.ConnectorIn, db: Session = Depends(get_db)
         verify_ssl=payload.verify_ssl,
         enabled=payload.enabled,
         poll_interval_seconds=payload.poll_interval_seconds,
+        site=payload.site,
         encrypted_credentials=crypto.encrypt(json.dumps(payload.credentials)),
     )
     db.add(connector)
@@ -44,8 +45,14 @@ def update_connector(connector_id: int, payload: schemas.ConnectorIn, db: Sessio
     connector.verify_ssl = payload.verify_ssl
     connector.enabled = payload.enabled
     connector.poll_interval_seconds = payload.poll_interval_seconds
+    connector.site = payload.site
     if payload.credentials:
-        connector.encrypted_credentials = crypto.encrypt(json.dumps(payload.credentials))
+        # Merge rather than replace: the edit UI only sends fields the user
+        # actually typed into, so e.g. changing just a password shouldn't
+        # blank out a username stored alongside it.
+        existing = json.loads(crypto.decrypt(connector.encrypted_credentials) or "{}")
+        existing.update(payload.credentials)
+        connector.encrypted_credentials = crypto.encrypt(json.dumps(existing))
 
     db.commit()
     db.refresh(connector)

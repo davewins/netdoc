@@ -1,14 +1,22 @@
 from .base import BaseConnector, ConnectorError, DiscoveredAsset
+from .home_assistant import HomeAssistantConnector
+from .kubernetes import KubernetesConnector
 from .network_scan import NetworkScanConnector
 from .pihole import PiholeConnector
 from .portainer import PortainerConnector
 from .proxmox import ProxmoxConnector
+from .uptime_kuma import UptimeKumaConnector
+from .wireguard import WireguardConnector
 
 CONNECTOR_TYPES = {
     "proxmox": ProxmoxConnector,
     "portainer": PortainerConnector,
     "pihole": PiholeConnector,
     "network_scan": NetworkScanConnector,
+    "home_assistant": HomeAssistantConnector,
+    "kubernetes": KubernetesConnector,
+    "uptime_kuma": UptimeKumaConnector,
+    "wireguard": WireguardConnector,
 }
 
 

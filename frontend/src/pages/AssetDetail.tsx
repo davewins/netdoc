@@ -124,6 +124,25 @@ export default function AssetDetail() {
         </div>
       )}
 
+      {asset.children.length > 0 && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>
+            {asset.asset_type === "ha_device" ? "Entities" : "Children"} ({asset.children.length})
+          </h2>
+          {asset.children.map((c) => (
+            <div key={c.id} style={{ marginBottom: 6 }}>
+              <Link className="row-link" to={`/assets/${c.id}`}>
+                {c.name}
+              </Link>{" "}
+              <span className="muted">
+                ({c.asset_type}
+                {c.status ? `, ${c.status}` : ""})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Enrichment</h2>
         <label>Notes</label>

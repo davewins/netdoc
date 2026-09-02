@@ -34,6 +34,11 @@ def _serialize(db: Session, asset: models.Asset) -> schemas.AssetOut:
             )
         )
     out.linked_assets = linked
+
+    children = db.query(models.Asset).filter(models.Asset.parent_id == asset.id).all()
+    out.children = [
+        schemas.ChildAssetOut(id=c.id, asset_type=c.asset_type, name=c.name, status=c.status) for c in children
+    ]
     return out
 
 
@@ -41,17 +46,36 @@ def _serialize(db: Session, asset: models.Asset) -> schemas.AssetOut:
 def list_assets(
     asset_type: Optional[str] = None,
     connector_id: Optional[int] = None,
+    site: Optional[str] = None,
     q: Optional[str] = None,
     include_merged: bool = False,
+    include_child_entities: bool = False,
     db: Session = Depends(get_db),
 ):
     query = db.query(models.Asset)
     if not include_merged:
         query = query.filter(models.Asset.canonical_asset_id.is_(None))
+    if not include_child_entities and not q:
+        # Home Assistant entities that belong to a device (e.g. a WLED
+        # strip's light + 5 helper switches, or a smart display's backlight
+        # + relays) are sub-components, not independently significant
+        # assets - the device itself is what belongs in the default list.
+        # Unlike Proxmox/Docker/k8s parent-child pairs (a VM or container is
+        # still worth its own row even though it has a parent), so this is
+        # scoped to ha_entity specifically rather than "any asset with a
+        # parent". Skipped when searching, so a search for e.g. "backlight"
+        # still finds the entity it's actually asking about.
+        query = query.filter(
+            ~((models.Asset.asset_type == "ha_entity") & (models.Asset.parent_id.isnot(None)))
+        )
     if asset_type:
         query = query.filter(models.Asset.asset_type == asset_type)
     if connector_id is not None:
         query = query.filter(models.Asset.connector_id == connector_id)
+    if site:
+        # Manual assets have no connector_id at all - an inner join is
+        # exactly right here, since they can't belong to any site.
+        query = query.join(models.Connector).filter(models.Connector.site == site)
     if q:
         like = f"%{q}%"
         query = query.filter(

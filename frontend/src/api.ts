@@ -15,11 +15,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   listAssets: (
-    params: { asset_type?: string; connector_id?: number; q?: string; include_merged?: boolean } = {},
+    params: {
+      asset_type?: string;
+      connector_id?: number;
+      site?: string;
+      q?: string;
+      include_merged?: boolean;
+    } = {},
   ) => {
     const qs = new URLSearchParams();
     if (params.asset_type) qs.set("asset_type", params.asset_type);
     if (params.connector_id !== undefined) qs.set("connector_id", String(params.connector_id));
+    if (params.site) qs.set("site", params.site);
     if (params.q) qs.set("q", params.q);
     if (params.include_merged) qs.set("include_merged", "true");
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
@@ -44,8 +51,21 @@ export const api = {
     base_url: string;
     verify_ssl: boolean;
     enabled: boolean;
+    site?: string;
     credentials: Record<string, string>;
   }) => request<Connector>("/api/connectors", { method: "POST", body: JSON.stringify(payload) }),
+  updateConnector: (
+    id: number,
+    payload: {
+      type: string;
+      name: string;
+      base_url: string;
+      verify_ssl: boolean;
+      enabled: boolean;
+      site?: string;
+      credentials: Record<string, string>;
+    },
+  ) => request<Connector>(`/api/connectors/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteConnector: (id: number) => request<void>(`/api/connectors/${id}`, { method: "DELETE" }),
   pollConnectorNow: (id: number) => request<Connector>(`/api/connectors/${id}/poll-now`, { method: "POST" }),
 

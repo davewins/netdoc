@@ -18,6 +18,13 @@ export interface CredentialRevealed extends Credential {
   secret: string | null;
 }
 
+export interface ChildAsset {
+  id: number;
+  asset_type: string;
+  name: string;
+  status: string | null;
+}
+
 export interface LinkedAsset {
   id: number;
   asset_type: string;
@@ -42,6 +49,7 @@ export interface Asset {
   ip_address: string | null;
   mac_address: string | null;
   status: string | null;
+  site: string | null;
   cpu_cores: number | null;
   memory_mb: number | null;
   disk_gb: number | null;
@@ -56,6 +64,7 @@ export interface Asset {
   updated_at: string;
   credentials: Credential[];
   linked_assets: LinkedAsset[];
+  children: ChildAsset[];
 }
 
 export interface Connector {
@@ -66,6 +75,7 @@ export interface Connector {
   verify_ssl: boolean;
   enabled: boolean;
   poll_interval_seconds: number | null;
+  site: string | null;
   last_polled_at: string | null;
   last_error: string | null;
   created_at: string;
@@ -94,6 +104,7 @@ export interface TopologyNode {
   asset_type: string;
   status: string | null;
   ip_address: string | null;
+  site: string | null;
   parent_id: number | null;
 }
 

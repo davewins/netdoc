@@ -16,6 +16,9 @@ ADDITIVE_COLUMNS = {
         ("disk_gb", "REAL"),
         ("uptime_seconds", "INTEGER"),
     ],
+    "connectors": [
+        ("site", "TEXT"),
+    ],
 }
 
 

@@ -2,21 +2,75 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DataSet, Network } from "vis-network/standalone/esm/vis-network";
 import { api } from "../api";
+import { useTheme } from "../theme";
 
-const TYPE_STYLE: Record<string, { color: string; shape: string }> = {
-  proxmox_node: { color: "#4f8cff", shape: "box" },
-  vm: { color: "#3fb950", shape: "ellipse" },
-  lxc: { color: "#3fb950", shape: "diamond" },
-  docker_host: { color: "#e5a53b", shape: "box" },
-  docker_stack: { color: "#e5a53b", shape: "database" },
-  docker_container: { color: "#e5a53b", shape: "ellipse" },
-  dns_record: { color: "#8b909c", shape: "dot" },
-  dhcp_reservation: { color: "#8b909c", shape: "dot" },
-  device: { color: "#c97ce5", shape: "dot" },
-  host: { color: "#c97ce5", shape: "dot" },
+const GRAPH_COLORS = {
+  dark: { font: "#e6e8eb", edge: "#2a2e37" },
+  light: { font: "#1a1d23", edge: "#c3c8d1" },
 };
 
+const TYPE_STYLE: Record<string, { color: string; shape: string; label: string }> = {
+  proxmox_node: { color: "#4f8cff", shape: "box", label: "Proxmox node" },
+  vm: { color: "#3fb950", shape: "ellipse", label: "VM" },
+  lxc: { color: "#3fb950", shape: "diamond", label: "LXC container" },
+  docker_host: { color: "#e5a53b", shape: "box", label: "Docker host" },
+  docker_stack: { color: "#e5a53b", shape: "database", label: "Docker stack" },
+  docker_container: { color: "#e5a53b", shape: "ellipse", label: "Docker container" },
+  dns_record: { color: "#8b909c", shape: "dot", label: "DNS record" },
+  dhcp_reservation: { color: "#8b909c", shape: "dot", label: "DHCP reservation" },
+  device: { color: "#c97ce5", shape: "dot", label: "Device" },
+  host: { color: "#c97ce5", shape: "dot", label: "Host (scanned)" },
+  k8s_node: { color: "#4f8cff", shape: "box", label: "Kubernetes node" },
+  k8s_pod: { color: "#e5a53b", shape: "ellipse", label: "Kubernetes pod" },
+  ha_device: { color: "#c97ce5", shape: "box", label: "Home Assistant device" },
+  ha_entity: { color: "#c97ce5", shape: "triangle", label: "Home Assistant entity" },
+  uptime_monitor: { color: "#8b909c", shape: "star", label: "Uptime Kuma monitor" },
+  wireguard_peer: { color: "#3fb950", shape: "hexagon", label: "WireGuard peer" },
+};
+const DEFAULT_STYLE = { color: "#8b909c", shape: "dot", label: "Other" };
+
+// A node whose connector is tagged with a site gets a colored ring around
+// it (in addition to the type fill above) so a remote location's assets
+// stand out in the graph. Palette is deliberately distinct from the
+// TYPE_STYLE hues above so the two encodings don't get confused for one
+// another; picked per site name via a stable hash so it stays the same
+// across refreshes without needing to persist an assignment anywhere.
+const SITE_RING_COLORS = ["#f0b429", "#2dd4bf", "#f472b6", "#a3e635", "#fb923c", "#38bdf8"];
+
+function siteRingColor(site: string): string {
+  let hash = 0;
+  for (let i = 0; i < site.length; i++) hash = (hash * 31 + site.charCodeAt(i)) | 0;
+  return SITE_RING_COLORS[Math.abs(hash) % SITE_RING_COLORS.length];
+}
+
 const REFRESH_MS = 15000;
+
+function ShapeSwatch({ shape, color }: { shape: string; color: string }) {
+  const common = { fill: color, stroke: "none" };
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+      {shape === "box" && <rect x="2" y="4" width="16" height="12" rx="2" {...common} />}
+      {shape === "ellipse" && <ellipse cx="10" cy="10" rx="9" ry="6" {...common} />}
+      {shape === "dot" && <circle cx="10" cy="10" r="6" {...common} />}
+      {shape === "diamond" && <polygon points="10,1 19,10 10,19 1,10" {...common} />}
+      {shape === "triangle" && <polygon points="10,2 19,17 1,17" {...common} />}
+      {shape === "hexagon" && <polygon points="15,2 19,10 15,18 5,18 1,10 5,2" {...common} />}
+      {shape === "star" && (
+        <polygon
+          points="10,1 12.4,7.1 19,7.6 13.9,11.8 15.6,18.2 10,14.6 4.4,18.2 6.1,11.8 1,7.6 7.6,7.1"
+          {...common}
+        />
+      )}
+      {shape === "database" && (
+        <g fill={color}>
+          <ellipse cx="10" cy="5" rx="8" ry="3" />
+          <path d="M2 5v10a8 3 0 0 0 16 0V5" />
+          <ellipse cx="10" cy="15" rx="8" ry="3" fill={color} opacity="0.6" />
+        </g>
+      )}
+    </svg>
+  );
+}
 
 export default function NetworkMap() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -24,20 +78,27 @@ export default function NetworkMap() {
   const nodesRef = useRef(new DataSet<any>());
   const edgesRef = useRef(new DataSet<any>());
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sites, setSites] = useState<string[]>([]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Captures whatever theme is current at mount time - later toggles are
+    // handled by the separate effect below via setOptions() rather than by
+    // rerunning this one, so switching theme doesn't blow away node
+    // positions and restart the physics simulation.
+    const initialColors = GRAPH_COLORS[theme];
     const network = new Network(
       containerRef.current,
       { nodes: nodesRef.current, edges: edgesRef.current },
       {
         physics: { stabilization: true, barnesHut: { springLength: 120 } },
         interaction: { hover: true },
-        nodes: { font: { color: "#e6e8eb" }, borderWidth: 1 },
-        edges: { color: "#2a2e37", smooth: { type: "dynamic", enabled: true, roundness: 0.5 } },
+        nodes: { font: { color: initialColors.font }, borderWidth: 1 },
+        edges: { color: initialColors.edge, smooth: { type: "dynamic", enabled: true, roundness: 0.5 } },
       },
     );
     networkRef.current = network;
@@ -65,10 +126,19 @@ export default function NetworkMap() {
       try {
         const topo = await api.getTopology();
         const nodeData = topo.nodes.map((n) => {
-          const style = TYPE_STYLE[n.asset_type] ?? { color: "#8b909c", shape: "dot" };
+          const style = TYPE_STYLE[n.asset_type] ?? DEFAULT_STYLE;
           const label = n.ip_address ? `${n.name}\n${n.ip_address}` : n.name;
-          return { id: n.id, label, color: style.color, shape: style.shape, title: n.asset_type };
+          const border = n.site ? siteRingColor(n.site) : style.color;
+          return {
+            id: n.id,
+            label,
+            shape: style.shape,
+            color: { background: style.color, border },
+            borderWidth: n.site ? 3 : 1,
+            title: n.site ? `${style.label} · ${n.site}` : style.label,
+          };
         });
+        setSites([...new Set(topo.nodes.map((n) => n.site).filter((s): s is string => !!s))].sort());
         const edgeData = topo.edges.map((e) => ({ id: `${e.source}-${e.target}`, from: e.source, to: e.target }));
 
         // Upsert rather than clear+add, so nodes that already exist keep the
@@ -102,6 +172,14 @@ export default function NetworkMap() {
     };
   }, [navigate]);
 
+  useEffect(() => {
+    const colors = GRAPH_COLORS[theme];
+    networkRef.current?.setOptions({
+      nodes: { font: { color: colors.font } },
+      edges: { color: colors.edge },
+    });
+  }, [theme]);
+
   return (
     <div>
       <h1>Network map</h1>
@@ -112,8 +190,33 @@ export default function NetworkMap() {
       {error && <div className="card status-error">{error}</div>}
       <div
         ref={containerRef}
-        style={{ height: "70vh", border: "1px solid var(--border)", borderRadius: 8, background: "#0d0f13" }}
+        style={{ height: "70vh", border: "1px solid var(--border)", borderRadius: 8, background: "var(--input-bg)" }}
       />
+
+      <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: "20px 28px", marginTop: 16 }}>
+        {Object.entries(TYPE_STYLE).map(([type, style]) => (
+          <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+            <ShapeSwatch shape={style.shape} color={style.color} />
+            <span className="muted">{style.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {sites.length > 0 && (
+        <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: "20px 28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+            <span className="muted">Colored ring = remote site:</span>
+          </div>
+          {sites.map((s) => (
+            <div key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              <svg width={18} height={18} viewBox="0 0 20 20" style={{ flexShrink: 0 }}>
+                <circle cx="10" cy="10" r="7" fill="none" stroke={siteRingColor(s)} strokeWidth="3" />
+              </svg>
+              <span className="muted">{s}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
