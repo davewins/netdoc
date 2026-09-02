@@ -68,19 +68,26 @@ def _compose_narrative(
 
     paragraphs: list[str] = []
     site_names = sorted(s for s in by_site if s != SITE_LABEL_LOCAL)
+    local_count = by_site.get(SITE_LABEL_LOCAL, 0)
 
     if site_names:
+        # Every connector can end up tagged with some site, leaving nothing
+        # untagged at all - phrase this without an awkward "and the
+        # remaining 0 are on the main network" when that's the case, rather
+        # than assuming there's always an implicit main-network group.
+        network_bit = "the main network and " if local_count else ""
         paragraphs.append(
-            f"netdoc is currently tracking {total} assets across the main network and "
+            f"netdoc is currently tracking {total} assets across {network_bit}"
             f"{_pluralize(len(site_names), 'tagged site')} ({', '.join(site_names)}), discovered via "
             f"{_pluralize(len(connectors), 'connector')}. The most common kinds of asset are {_top_types(by_type)}."
         )
         site_bits = [f"{s} has {_pluralize(by_site[s], 'asset')}" for s in site_names]
-        paragraphs.append(
-            "By site: "
-            + "; ".join(site_bits)
-            + f", and the remaining {_pluralize(by_site.get(SITE_LABEL_LOCAL, 0), 'asset')} are on the main network."
-        )
+        by_site_sentence = "By site: " + "; ".join(site_bits)
+        if local_count:
+            by_site_sentence += f", and the remaining {_pluralize(local_count, 'asset')} are on the main network."
+        else:
+            by_site_sentence += ". Every asset is on a tagged site - there's no untagged main network left."
+        paragraphs.append(by_site_sentence)
     else:
         paragraphs.append(
             f"netdoc is currently tracking {total} assets on the main network, discovered via "

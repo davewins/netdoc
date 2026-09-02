@@ -291,23 +291,24 @@ export default function NetworkMap() {
         groupsForDrawRef.current = multiGroup ? groupMap : new Map();
 
         if (multiGroup) {
-          // Only tagged-site groups get pulled toward a fixed anchor - the
-          // untagged "local network" group (almost always the large
-          // majority of devices) is left with no anchor at all and keeps
-          // settling exactly as it always did. Anchoring that big group too
-          // was the earlier bug: forcing hundreds of mutually-repelling
-          // nodes to also relocate around one fixed point fights Barnes-Hut
-          // repulsion hard enough that it barely settles, and inflates the
-          // separation radius needed to a huge value. A handful of remote-
-          // site devices pulling gently to one side is a far smaller, far
-          // more stable perturbation, and still gives every future site its
-          // own anchor automatically.
-          const siteGroupKeys = groupKeys.filter((k) => k !== LOCAL_GROUP_KEY);
-          const localCount = groupMap.get(LOCAL_GROUP_KEY)?.ids.length ?? 0;
-          // Distance has to clear how far the untouched local mass is likely
-          // to spread on its own (roughly sqrt(n) under Barnes-Hut) so a
-          // site's anchor doesn't end up inside it.
-          const radius = Math.max(700, Math.sqrt(localCount) * 60) + siteGroupKeys.length * 150;
+          // Every group except the single largest gets pulled toward a
+          // fixed anchor - the largest is left with no anchor at all and
+          // keeps settling exactly as it always did. Anchoring that big
+          // group too was the earlier bug: forcing hundreds of mutually-
+          // repelling nodes to also relocate around one fixed point fights
+          // Barnes-Hut repulsion hard enough that it barely settles. This
+          // used to just mean "the untagged local group", but nothing
+          // stops every connector from ending up tagged with some site
+          // (no untagged devices left at all) - picking the exemption by
+          // size rather than by whether a group happens to be untagged is
+          // what keeps this stable either way.
+          const dominantKey = [...groupMap.entries()].sort((a, b) => b[1].ids.length - a[1].ids.length)[0][0];
+          const siteGroupKeys = groupKeys.filter((k) => k !== dominantKey);
+          const dominantCount = groupMap.get(dominantKey)!.ids.length;
+          // Distance has to clear how far the untouched dominant mass is
+          // likely to spread on its own (roughly sqrt(n) under Barnes-Hut)
+          // so a site's anchor doesn't end up inside it.
+          const radius = Math.max(700, Math.sqrt(dominantCount) * 60) + siteGroupKeys.length * 150;
           siteGroupKeys.forEach((key, i) => {
             const angle = (i / siteGroupKeys.length) * 2 * Math.PI;
             const anchorId = `anchor:${key}`;
