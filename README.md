@@ -84,7 +84,7 @@ known as" section on its detail page; Inventory's own counts and the
 
 ## Sites
 
-Give a connector a "Site" (in Connectors, e.g. "Teignmouth") if it talks
+Give a connector a "Site" (in Connectors, e.g. "Site A") if it talks
 to a second physical location rather than your main network - every asset
 it discovers inherits that label. Inventory can filter by it, Dashboard
 gets an "Other sites" breakdown, and Network map draws a colored ring

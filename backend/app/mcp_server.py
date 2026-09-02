@@ -67,7 +67,7 @@ def list_assets(
     connector_id: int | None = None,
 ) -> list[dict]:
     """List discovered/tracked network assets. Filter by asset_type (e.g. "vm", "docker_container",
-    "device"), by site (a connector's tagged remote location, e.g. "Teignmouth"; omit for everything),
+    "device"), by site (a connector's tagged remote location, e.g. "Site A"; omit for everything),
     by connector_id, or search name/hostname/IP with q."""
     db = SessionLocal()
     try:

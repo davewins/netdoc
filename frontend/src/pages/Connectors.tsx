@@ -260,7 +260,7 @@ function ConnectorForm({
           <input
             value={site}
             onChange={(e) => setSite(e.target.value)}
-            placeholder="e.g. Teignmouth - blank for your main network"
+            placeholder="e.g. Site A - blank for your main network"
             list="connector-sites"
           />
           <datalist id="connector-sites">

@@ -30,7 +30,7 @@ class Connector(Base):
     base_url = Column(String, nullable=False)
     verify_ssl = Column(Boolean, default=False)
     # Free-text label for which physical location this connector talks to
-    # (e.g. "Teignmouth") - unset for your main/local network. Purely
+    # (e.g. "Site A") - unset for your main/local network. Purely
     # organizational: every asset discovered through this connector
     # inherits it (see Asset.site below), nothing else treats it specially.
     site = Column(String, nullable=True)
