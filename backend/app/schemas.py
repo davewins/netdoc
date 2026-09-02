@@ -8,6 +8,7 @@ class PortEntry(BaseModel):
     port: int
     protocol: str = "tcp"
     description: str = ""
+    url: Optional[str] = None
 
 
 class CredentialIn(BaseModel):
@@ -53,6 +54,7 @@ class ChildAssetOut(BaseModel):
     asset_type: str
     name: str
     status: Optional[str] = None
+    ports: list[dict] = []
 
 
 class AssetOut(BaseModel):

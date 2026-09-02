@@ -1,3 +1,6 @@
+import re
+from urllib.parse import urlparse
+
 import requests
 
 from .base import BaseConnector, ConnectorError, DiscoveredAsset
@@ -87,20 +90,49 @@ class PortainerConnector(BaseConnector):
                 return ip, mac or None
         return None, None
 
+    def _host_address(self, ep: dict) -> str | None:
+        """Address other devices on the LAN can reach this endpoint's
+        published container ports on, for building clickable service URLs.
+
+        Portainer's own UI uses the same field (PublicURL, an IP/FQDN with
+        no scheme or port) for exactly this purpose, but most homelab setups
+        never fill it in. A unix://-socket endpoint (the default for a
+        single-node install with no agent) means Portainer is talking to the
+        Docker engine on its own host, so this connector's own configured
+        address is a reliable fallback there. A tcp:// agent/remote endpoint
+        parses its host out of URL directly; there's no way to guess one for
+        Windows named-pipe (npipe://) agents.
+        """
+        public_url = (ep.get("PublicURL") or "").strip()
+        if public_url:
+            return public_url
+        url = ep.get("URL") or ""
+        match = re.match(r"^tcp://([^:/]+)", url)
+        if match:
+            return match.group(1)
+        if url.startswith("unix://"):
+            return urlparse(self.base_url).hostname
+        return None
+
     @staticmethod
-    def _ports_from_docker(container: dict) -> list[dict]:
+    def _ports_from_docker(container: dict, host_address: str | None) -> list[dict]:
         entries = []
         for p in container.get("Ports", []):
-            port = p.get("PublicPort") or p.get("PrivatePort")
+            public_port = p.get("PublicPort")
+            port = public_port or p.get("PrivatePort")
             if not port:
                 continue
-            entries.append(
-                {
-                    "port": port,
-                    "protocol": p.get("Type", "tcp"),
-                    "description": f"container port {p.get('PrivatePort')}",
-                }
-            )
+            entry = {
+                "port": port,
+                "protocol": p.get("Type", "tcp"),
+                "description": f"container port {p.get('PrivatePort')}",
+            }
+            # Only a host-published port is actually reachable from the LAN -
+            # an unpublished container-internal port stays URL-less.
+            if public_port and host_address and entry["protocol"] == "tcp":
+                scheme = "https" if public_port in (443, 8443) else "http"
+                entry["url"] = f"{scheme}://{host_address}:{public_port}"
+            entries.append(entry)
         # de-dupe while preserving order
         seen = set()
         deduped = []
@@ -123,6 +155,7 @@ class PortainerConnector(BaseConnector):
         for ep in endpoints:
             ep_id = ep["Id"]
             ep_name = ep["Name"]
+            host_address = self._host_address(ep)
             assets.append(
                 DiscoveredAsset(
                     asset_type="docker_host",
@@ -194,7 +227,7 @@ class PortainerConnector(BaseConnector):
                         mac_address=mac,
                         cpu_cores=cpu_cores,
                         memory_mb=memory_mb,
-                        initial_ports=self._ports_from_docker(c),
+                        initial_ports=self._ports_from_docker(c, host_address),
                         initial_services=_guess_services(c.get("Image")),
                         raw_data={**c, "inspect": inspect},
                     )

@@ -138,6 +138,24 @@ export default function AssetDetail() {
                 ({c.asset_type}
                 {c.status ? `, ${c.status}` : ""})
               </span>
+              {c.ports.some((p) => p.url) && (
+                <div style={{ marginLeft: 12 }}>
+                  {c.ports
+                    .filter((p) => p.url)
+                    .map((p, i) => (
+                      <a
+                        key={i}
+                        className="row-link muted"
+                        href={p.url!}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ marginRight: 12 }}
+                      >
+                        {p.url}
+                      </a>
+                    ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -156,25 +174,32 @@ export default function AssetDetail() {
 
         <label>Ports</label>
         {ports.map((p, i) => (
-          <div className="form-row" key={i} style={{ marginBottom: 6 }}>
-            <input
-              type="number"
-              value={p.port}
-              onChange={(e) => updatePort(i, { port: Number(e.target.value) })}
-              placeholder="443"
-            />
-            <select value={p.protocol} onChange={(e) => updatePort(i, { protocol: e.target.value })}>
-              <option value="tcp">tcp</option>
-              <option value="udp">udp</option>
-            </select>
-            <input
-              value={p.description}
-              onChange={(e) => updatePort(i, { description: e.target.value })}
-              placeholder="description"
-            />
-            <button className="danger" onClick={() => removePort(i)}>
-              Remove
-            </button>
+          <div key={i} style={{ marginBottom: 6 }}>
+            <div className="form-row">
+              <input
+                type="number"
+                value={p.port}
+                onChange={(e) => updatePort(i, { port: Number(e.target.value) })}
+                placeholder="443"
+              />
+              <select value={p.protocol} onChange={(e) => updatePort(i, { protocol: e.target.value })}>
+                <option value="tcp">tcp</option>
+                <option value="udp">udp</option>
+              </select>
+              <input
+                value={p.description}
+                onChange={(e) => updatePort(i, { description: e.target.value })}
+                placeholder="description"
+              />
+              <button className="danger" onClick={() => removePort(i)}>
+                Remove
+              </button>
+            </div>
+            {p.url && (
+              <a className="row-link muted" href={p.url} target="_blank" rel="noreferrer">
+                {p.url}
+              </a>
+            )}
           </div>
         ))}
         <button className="secondary" onClick={addPort}>

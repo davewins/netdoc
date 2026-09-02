@@ -2,6 +2,7 @@ export interface PortEntry {
   port: number;
   protocol: string;
   description: string;
+  url?: string | null;
 }
 
 export interface Credential {
@@ -23,6 +24,7 @@ export interface ChildAsset {
   asset_type: string;
   name: string;
   status: string | null;
+  ports: PortEntry[];
 }
 
 export interface LinkedAsset {

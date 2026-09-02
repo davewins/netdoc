@@ -13,6 +13,24 @@ from .models import Asset, Connector, utcnow
 logger = logging.getLogger("netdoc.scheduler")
 
 
+def _merge_ports(existing_ports: list[dict], discovered_ports: list[dict]) -> list[dict]:
+    """Add newly-discovered ports and refresh the url of ones already known,
+    without ever removing an entry - manual port edits must survive a
+    re-poll the same way tags/services do, so this only ever adds/updates,
+    never drops (e.g. a port un-published upstream just stops refreshing)."""
+    merged = [dict(p) for p in existing_ports]
+    index = {(p.get("port"), p.get("protocol")): i for i, p in enumerate(merged)}
+    for dp in discovered_ports:
+        key = (dp.get("port"), dp.get("protocol"))
+        if key in index:
+            if dp.get("url"):
+                merged[index[key]]["url"] = dp["url"]
+        else:
+            merged.append(dict(dp))
+            index[key] = len(merged) - 1
+    return merged
+
+
 def poll_connector(db: Session, connector: Connector) -> None:
     try:
         creds = json.loads(crypto.decrypt(connector.encrypted_credentials) or "{}")
@@ -50,6 +68,7 @@ def poll_connector(db: Session, connector: Connector) -> None:
             existing.disk_gb = item.disk_gb
             existing.uptime_seconds = item.uptime_seconds
             existing.raw_data = item.raw_data
+            existing.ports = _merge_ports(existing.ports or [], item.initial_ports)
             existing.last_seen_at = utcnow()
             asset = existing
         else:

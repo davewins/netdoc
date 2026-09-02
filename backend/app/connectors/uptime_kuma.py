@@ -58,10 +58,13 @@ class UptimeKumaConnector(BaseConnector):
 
     Requires "Expose Prometheus Metrics" enabled in Uptime Kuma's settings.
     Expected credentials dict, either:
-      {"api_key": "uk1_..."} (used as the basic-auth username, per Kuma's
-      own docs, with the password left blank)
+      {"api_key": "uk1_..."} (sent as the basic-auth *password* with the
+      username left blank - `curl -u":<key>"` per Kuma's docs; note that
+      adding any API key in Kuma permanently disables basic-auth login on
+      this endpoint, so an api_key here is mandatory once one exists)
     or:
-      {"username": "...", "password": "..."} (your Kuma login)
+      {"username": "...", "password": "..."} (your Kuma login - only works
+      until the first API key is created in Kuma)
 
     Each monitor becomes its own DiscoveredAsset (asset_type "uptime_monitor")
     rather than trying to match an existing asset itself - that's left to
@@ -83,7 +86,7 @@ class UptimeKumaConnector(BaseConnector):
 
     def _auth(self):
         if self.credentials.get("api_key"):
-            return (self.credentials["api_key"], "")
+            return ("", self.credentials["api_key"])
         username = self.credentials.get("username")
         password = self.credentials.get("password")
         if not username or not password:

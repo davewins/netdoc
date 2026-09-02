@@ -37,7 +37,8 @@ def _serialize(db: Session, asset: models.Asset) -> schemas.AssetOut:
 
     children = db.query(models.Asset).filter(models.Asset.parent_id == asset.id).all()
     out.children = [
-        schemas.ChildAssetOut(id=c.id, asset_type=c.asset_type, name=c.name, status=c.status) for c in children
+        schemas.ChildAssetOut(id=c.id, asset_type=c.asset_type, name=c.name, status=c.status, ports=c.ports or [])
+        for c in children
     ]
     return out
 
