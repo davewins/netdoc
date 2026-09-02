@@ -6,6 +6,7 @@ from .pihole import PiholeConnector
 from .portainer import PortainerConnector
 from .proxmox import ProxmoxConnector
 from .uptime_kuma import UptimeKumaConnector
+from .wgdashboard import WGDashboardConnector
 from .wireguard import WireguardConnector
 
 CONNECTOR_TYPES = {
@@ -17,6 +18,7 @@ CONNECTOR_TYPES = {
     "kubernetes": KubernetesConnector,
     "uptime_kuma": UptimeKumaConnector,
     "wireguard": WireguardConnector,
+    "wgdashboard": WGDashboardConnector,
 }
 
 

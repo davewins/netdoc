@@ -26,6 +26,10 @@ const CONNECTOR_FIELDS: Record<string, { key: string; label: string; type?: stri
     { key: "username", label: "wg-easy username" },
     { key: "password", label: "wg-easy password", type: "password" },
   ],
+  wgdashboard: [
+    { key: "username", label: "WGDashboard username" },
+    { key: "password", label: "WGDashboard password", type: "password" },
+  ],
 };
 
 const BASE_URL_LABEL: Record<string, string> = {
@@ -34,6 +38,7 @@ const BASE_URL_LABEL: Record<string, string> = {
   home_assistant: "Home Assistant URL (e.g. http://homeassistant.local:8123)",
   uptime_kuma: "Uptime Kuma URL",
   wireguard: "wg-easy URL (e.g. http://192.168.1.5:51821)",
+  wgdashboard: "WGDashboard URL (e.g. http://192.168.1.5:10086)",
 };
 
 export default function Connectors() {
@@ -235,6 +240,7 @@ function ConnectorForm({
             <option value="kubernetes">Kubernetes</option>
             <option value="uptime_kuma">Uptime Kuma</option>
             <option value="wireguard">WireGuard (wg-easy)</option>
+            <option value="wgdashboard">WireGuard (WGDashboard)</option>
           </select>
         </div>
         <div>

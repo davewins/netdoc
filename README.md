@@ -42,11 +42,14 @@ API endpoints, never changes anything on Proxmox/Portainer/Pi-hole.
   with an existing one by IP (resolved from the monitor's hostname where
   needed); confirming that link in **Link suggestions** is what applies
   the backfill
-- **WireGuard (wg-easy)**: VPN peers/clients - name, tunnel IP, and a
-  connected/disconnected/disabled status derived from the last handshake
-  time. Talks to wg-easy's web UI backend (WireGuard itself has no API)
-  - targets the v14+ Nuxt-based rewrite; the older pre-v14 build isn't
-  supported
+- **WireGuard (wg-easy or WGDashboard)**: VPN peers - name, tunnel IP, and
+  a connected/disconnected/disabled status derived from the last
+  handshake time. Two separate connector types, since these are two
+  unrelated self-hosted WireGuard UIs with their own APIs (WireGuard
+  itself has no API of its own) - pick whichever one a given instance
+  actually runs. wg-easy targets the v14+ Nuxt-based rewrite; the older
+  pre-v14 build isn't supported. WGDashboard doesn't support an account
+  with TOTP enabled (no way to supply a live code from a poll loop).
 - **Everything else** (plain Linux hosts, smart devices, anything without
   an API): add manually in Inventory, then enrich it the same way as
   discovered assets
@@ -207,8 +210,9 @@ unless you've supplied that CA to the container.
 **Uptime Kuma** - enable "Expose Prometheus Metrics" in Settings, then use
 an API key (Settings > API Keys) or your login username/password.
 
-**WireGuard (wg-easy)** - use the username/password you log into its web
-UI with.
+**WireGuard (wg-easy or WGDashboard)** - use the username/password you log
+into whichever web UI with. WGDashboard accounts with TOTP enabled aren't
+supported.
 
 ### Reaching a second site over an existing tunnel
 
