@@ -7,6 +7,15 @@ of it into one picture per physical/virtual host, and gives you a web UI
 to enrich each one with the details no API exposes - ports, credentials,
 notes, "what service is this actually running" tags.
 
+I built this to document my own homelab. I'd accumulated VMs, LXC
+containers, Docker stacks, and a pile of other self-hosted services across
+a couple of sites and had no single up-to-date picture of what was running
+where or on what port - and every "network documentation" tool I found was
+either a manual CMDB (you type everything in yourself and it rots the
+moment you forget to update it) or pure discovery with nowhere to hang
+notes/credentials/ports on what it found. I wanted both halves in one
+thing I could just run against my own infrastructure, so this is that.
+
 v1 is read-only against your infrastructure: it only ever calls list/read
 API endpoints, never changes anything on Proxmox/Portainer/Pi-hole.
 
