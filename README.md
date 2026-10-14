@@ -155,8 +155,13 @@ which most clients follow automatically, but not all do.)
 ## Running it
 
 ```bash
-docker compose up -d --build
+cp .env.example .env   # optional: set the port / pin secrets
+docker compose up -d   # pulls ghcr.io/davewins/netdoc:latest
 ```
+
+To build from source instead, swap `image:` for `build: .` in
+`docker-compose.yml` and run `docker compose up -d --build`. Pushes to `main`
+and `v*` tags publish a new image via GitHub Actions.
 
 Then open the app on port 8000 and go to **Connectors** to add your
 Proxmox / Portainer / Pi-hole instances, and optionally a network-scan

@@ -6,7 +6,7 @@ name: netdoc
 
 services:
   netdoc:
-    build: .
+    image: ghcr.io/davewins/netdoc:latest   # or: build: .
     container_name: netdoc
     restart: unless-stopped
     # Host networking + NET_ADMIN/NET_RAW so the network-scan connector's
@@ -15,23 +15,25 @@ services:
     # Docker Desktop (Mac/Windows) doesn't give containers real host
     # network access, so scanning won't find LAN devices there.
     network_mode: host
+    # Drop everything, then grant back only what nmap needs.
+    cap_drop: [ALL]
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    # Values come from a .env file next to this file (docker compose) or from
+    # the stack's "Environment variables" section (Portainer). Unset = default.
+    environment:
+      NETDOC_POLL_INTERVAL_SECONDS: ${NETDOC_POLL_INTERVAL_SECONDS:-300}
+      # With network_mode: host this binds directly to a host port, so
+      # override it if 8000 is already taken.
+      NETDOC_PORT: ${NETDOC_PORT:-8000}
+      # Optional secrets. Empty = netdoc generates and persists its own under
+      # /data (master.key, mcp_token). If you pin the master key, back it up -
+      # losing it makes stored credentials unrecoverable.
+      NETDOC_MASTER_KEY: ${NETDOC_MASTER_KEY:-}
+      NETDOC_MCP_TOKEN: ${NETDOC_MCP_TOKEN:-}
     volumes:
       - netdoc-data:/data
-    environment:
-      # Poll every 5 minutes by default.
-      NETDOC_POLL_INTERVAL_SECONDS: "300"
-      # With network_mode: host, this binds directly to a port on the
-      # host itself (not an isolated bridge network) - override via a
-      # NETDOC_PORT=xxxx env var (or a .env file next to this compose
-      # file, gitignored) if 8000 is already taken on this host.
-      NETDOC_PORT: "${NETDOC_PORT:-8000}"
-      # Optional: pin the encryption key instead of letting netdoc generate
-      # and persist one at /data/master.key on first run. If you set this,
-      # back it up - losing it makes stored credentials unrecoverable.
-      # NETDOC_MASTER_KEY: ""
 
 volumes:
   netdoc-data:
