@@ -18,6 +18,15 @@ def _parse_uptime(value: str | None) -> int | None:
     return sum(int(n) * _UPTIME_UNITS[u] for n, u in parts)
 
 
+def _is_randomised_mac(mac: str) -> bool:
+    """True for a locally-administered MAC (bit 1 of the first octet set).
+
+    Phones and laptops use these as per-network "private" WiFi addresses, so
+    they're not a stable identity for a device.
+    """
+    return bool(int(mac.split(":")[0], 16) & 0x02)
+
+
 def _bool(value) -> bool:
     # The REST API returns every boolean as the string "true"/"false".
     return str(value).lower() == "true"
@@ -47,7 +56,10 @@ class RouterOSConnector(BaseConnector):
     Learned hosts become "device" assets parented to the switch, with the
     port in raw_data and an initial "port:<name>" tag. A host is only
     reported if the FDB has it, so devices that are merely in ARP but not
-    behind this switch are ignored.
+    behind this switch are ignored. A host with a locally-administered
+    (randomised) MAC is skipped unless ARP or a lease gives it an IP: with
+    neither there's nothing to name it by and nothing stable to merge on,
+    and the DHCP server's own record of it (e.g. Pi-hole's) is the better one.
 
     Expected credentials dict: {"username": "...", "password": "..."}.
     """
@@ -150,6 +162,8 @@ class RouterOSConnector(BaseConnector):
                 continue
             seen.add(mac)
             ip = arp_ip.get(mac) or lease_ip.get(mac)
+            if not ip and _is_randomised_mac(mac):
+                continue
             name = lease_name.get(mac) or ip or mac
             port = host.get("on-interface")
             assets.append(
