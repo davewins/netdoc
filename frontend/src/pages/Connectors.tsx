@@ -30,6 +30,10 @@ const CONNECTOR_FIELDS: Record<string, { key: string; label: string; type?: stri
     { key: "username", label: "WGDashboard username" },
     { key: "password", label: "WGDashboard password", type: "password" },
   ],
+  routeros: [
+    { key: "username", label: "RouterOS username (read-only)" },
+    { key: "password", label: "RouterOS password", type: "password" },
+  ],
 };
 
 const BASE_URL_LABEL: Record<string, string> = {
@@ -39,6 +43,7 @@ const BASE_URL_LABEL: Record<string, string> = {
   uptime_kuma: "Uptime Kuma URL",
   wireguard: "wg-easy URL (e.g. http://192.168.1.5:51821)",
   wgdashboard: "WGDashboard URL (e.g. http://192.168.1.5:10086)",
+  routeros: "RouterOS URL (e.g. http://192.168.1.2)",
 };
 
 export default function Connectors() {
@@ -241,6 +246,7 @@ function ConnectorForm({
             <option value="uptime_kuma">Uptime Kuma</option>
             <option value="wireguard">WireGuard (wg-easy)</option>
             <option value="wgdashboard">WireGuard (WGDashboard)</option>
+            <option value="routeros">MikroTik RouterOS</option>
           </select>
         </div>
         <div>
