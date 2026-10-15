@@ -5,6 +5,7 @@ from .network_scan import NetworkScanConnector
 from .pihole import PiholeConnector
 from .portainer import PortainerConnector
 from .proxmox import ProxmoxConnector
+from .routeros import RouterOSConnector
 from .uptime_kuma import UptimeKumaConnector
 from .wgdashboard import WGDashboardConnector
 from .wireguard import WireguardConnector
@@ -19,6 +20,7 @@ CONNECTOR_TYPES = {
     "uptime_kuma": UptimeKumaConnector,
     "wireguard": WireguardConnector,
     "wgdashboard": WGDashboardConnector,
+    "routeros": RouterOSConnector,
 }
 
 

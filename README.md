@@ -59,6 +59,11 @@ API endpoints, never changes anything on Proxmox/Portainer/Pi-hole.
   actually runs. wg-easy targets the v14+ Nuxt-based rewrite; the older
   pre-v14 build isn't supported. WGDashboard doesn't support an account
   with TOTP enabled (no way to supply a live code from a poll loop).
+- **MikroTik RouterOS**: the switch/router itself (CPU, RAM, uptime,
+  version, interfaces) plus every host in its bridge MAC table, tagged with
+  the port it's learned on and parented to the switch. Uses the RouterOS v7
+  REST API (7.1+) - enable the `www` or `www-ssl` service and use a
+  read-only user. Not available on RouterOS v6.
 - **Everything else** (plain Linux hosts, smart devices, anything without
   an API): add manually in Inventory, then enrich it the same way as
   discovered assets
