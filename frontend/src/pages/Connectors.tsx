@@ -198,6 +198,9 @@ function ConnectorForm({
   const [verifySsl, setVerifySsl] = useState(connector?.verify_ssl ?? false);
   const [enabled, setEnabled] = useState(connector?.enabled ?? true);
   const [site, setSite] = useState(connector?.site ?? "");
+  const [staleDays, setStaleDays] = useState(connector?.stale_after_days?.toString() ?? "");
+  const [pruneDays, setPruneDays] = useState(connector?.prune_after_days?.toString() ?? "");
+  const [pruneDryRun, setPruneDryRun] = useState(connector?.prune_dry_run ?? true);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -211,6 +214,9 @@ function ConnectorForm({
         verify_ssl: verifySsl,
         enabled,
         site: site.trim() || undefined,
+        stale_after_days: staleDays.trim() ? Number(staleDays) : null,
+        prune_after_days: pruneDays.trim() ? Number(pruneDays) : null,
+        prune_dry_run: pruneDryRun,
         credentials: fields,
       };
       if (isEdit) {
@@ -322,6 +328,30 @@ function ConnectorForm({
           />
         </div>
       ))}
+
+      <p className="muted">
+        Retention (optional, blank = off): mark assets this connector has stopped seeing as stale, and
+        delete the unidentified ones (no IP, nothing added by hand, not merged with another source).
+      </p>
+      <div className="form-row">
+        <div>
+          <label>Mark stale after (days)</label>
+          <input type="number" min={1} value={staleDays} onChange={(e) => setStaleDays(e.target.value)} placeholder="e.g. 14" />
+        </div>
+        <div>
+          <label>Delete unidentified after (days)</label>
+          <input type="number" min={1} value={pruneDays} onChange={(e) => setPruneDays(e.target.value)} placeholder="e.g. 30" />
+        </div>
+      </div>
+      <label>
+        <input
+          type="checkbox"
+          style={{ width: "auto", marginRight: 6 }}
+          checked={pruneDryRun}
+          onChange={(e) => setPruneDryRun(e.target.checked)}
+        />
+        Dry run - only log what would be deleted (preview: /api/connectors/{isEdit ? connector.id : "id"}/retention-preview)
+      </label>
 
       {error && <div className="status-error">{error}</div>}
       <button onClick={submit}>{isEdit ? "Save changes" : "Create connector"}</button>{" "}

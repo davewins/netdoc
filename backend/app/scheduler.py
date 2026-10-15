@@ -9,6 +9,7 @@ from .connectors import ConnectorError, build_connector
 from .correlation import run_correlation
 from .database import SessionLocal
 from .models import Asset, Connector, utcnow
+from .retention import apply_retention
 
 logger = logging.getLogger("netdoc.scheduler")
 
@@ -113,6 +114,12 @@ def poll_connector(db: Session, connector: Connector) -> None:
     logger.info("Connector %s (%s) discovered %d assets", connector.name, connector.type, len(discovered))
 
     run_correlation(db)
+
+    # Only after a poll that worked and found something - a failed or empty
+    # poll says nothing about what has actually gone - and after correlation,
+    # so freshly-merged records are already excluded.
+    if discovered:
+        apply_retention(db, connector)
 
 
 def poll_all():

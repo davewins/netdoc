@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from .. import crypto, models, schemas
 from ..database import get_db
+from ..retention import plan_retention
 from ..scheduler import poll_connector
 
 router = APIRouter(prefix="/api/connectors", tags=["connectors"])
@@ -25,6 +26,9 @@ def create_connector(payload: schemas.ConnectorIn, db: Session = Depends(get_db)
         enabled=payload.enabled,
         poll_interval_seconds=payload.poll_interval_seconds,
         site=payload.site,
+        stale_after_days=payload.stale_after_days,
+        prune_after_days=payload.prune_after_days,
+        prune_dry_run=payload.prune_dry_run,
         encrypted_credentials=crypto.encrypt(json.dumps(payload.credentials)),
     )
     db.add(connector)
@@ -46,6 +50,11 @@ def update_connector(connector_id: int, payload: schemas.ConnectorIn, db: Sessio
     connector.enabled = payload.enabled
     connector.poll_interval_seconds = payload.poll_interval_seconds
     connector.site = payload.site
+    # Only touch retention settings the caller actually sent, so a client
+    # that predates them can't silently reset a connector's retention.
+    for name in ("stale_after_days", "prune_after_days", "prune_dry_run"):
+        if name in payload.model_fields_set:
+            setattr(connector, name, getattr(payload, name))
     if payload.credentials:
         # Merge rather than replace: the edit UI only sends fields the user
         # actually typed into, so e.g. changing just a password shouldn't
@@ -77,3 +86,24 @@ def poll_now(connector_id: int, db: Session = Depends(get_db)):
     poll_connector(db, connector)
     db.refresh(connector)
     return connector
+
+
+@router.get("/{connector_id}/retention-preview")
+def retention_preview(connector_id: int, db: Session = Depends(get_db)):
+    """What the next poll would mark stale / prune, without changing anything."""
+    connector = db.get(models.Connector, connector_id)
+    if not connector:
+        raise HTTPException(404, "Connector not found")
+    plan = plan_retention(db, connector)
+
+    def brief(a: models.Asset):
+        return {"id": a.id, "name": a.name, "mac_address": a.mac_address, "last_seen_at": a.last_seen_at}
+
+    return {
+        "stale_after_days": connector.stale_after_days,
+        "prune_after_days": connector.prune_after_days,
+        "prune_dry_run": connector.prune_dry_run is not False,
+        "prune_blocked_by_cap": plan.prune_blocked_by_cap,
+        "would_mark_stale": [brief(a) for a in plan.stale],
+        "would_prune": [brief(a) for a in plan.prune],
+    }

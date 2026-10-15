@@ -71,6 +71,25 @@ API endpoints, never changes anything on Proxmox/Portainer/Pi-hole.
 Every asset - discovered or manual - can be enriched with notes, tags,
 ports, service labels, and encrypted credentials.
 
+## Stale and unidentified assets
+
+NetDoc never removes anything on its own by default. Each connector has two
+optional retention settings (Connectors page, blank = off):
+
+- **Mark stale after N days** - an asset the connector hasn't seen for N days
+  gets status `stale` (it goes back to normal if it reappears).
+- **Delete unidentified after M days** - additionally deletes an asset that
+  connector found, hasn't seen for M days, and that has no IP, nothing added
+  by hand (notes, ports, services, credentials, or tags other than automatic
+  `port:` ones), and no merge with another source's record. Starts in **dry
+  run** (logs what it would delete); untick "Dry run" to let it delete. At
+  most a quarter of a connector's assets (minimum 10) are deleted per poll.
+
+A device another connector still sees (e.g. Pi-hole) counts as seen, and a
+failed or empty poll never triggers any of this.
+`GET /api/connectors/{id}/retention-preview` shows what the next poll would
+mark or delete.
+
 ## Cross-referencing
 
 The same physical/virtual host is usually discovered more than once - a
