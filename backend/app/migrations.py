@@ -18,6 +18,9 @@ ADDITIVE_COLUMNS = {
     ],
     "connectors": [
         ("site", "TEXT"),
+        ("stale_after_days", "INTEGER"),
+        ("prune_after_days", "INTEGER"),
+        ("prune_dry_run", "BOOLEAN DEFAULT 1"),
     ],
 }
 

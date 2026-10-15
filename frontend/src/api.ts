@@ -52,6 +52,9 @@ export const api = {
     verify_ssl: boolean;
     enabled: boolean;
     site?: string;
+    stale_after_days: number | null;
+    prune_after_days: number | null;
+    prune_dry_run: boolean;
     credentials: Record<string, string>;
   }) => request<Connector>("/api/connectors", { method: "POST", body: JSON.stringify(payload) }),
   updateConnector: (
@@ -63,6 +66,9 @@ export const api = {
       verify_ssl: boolean;
       enabled: boolean;
       site?: string;
+      stale_after_days: number | null;
+      prune_after_days: number | null;
+      prune_dry_run: boolean;
       credentials: Record<string, string>;
     },
   ) => request<Connector>(`/api/connectors/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),

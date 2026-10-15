@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PortEntry(BaseModel):
@@ -116,7 +116,16 @@ class ConnectorIn(BaseModel):
     enabled: bool = True
     poll_interval_seconds: Optional[int] = None
     site: Optional[str] = None
+    stale_after_days: Optional[int] = Field(default=None, ge=1)
+    prune_after_days: Optional[int] = Field(default=None, ge=1)
+    prune_dry_run: bool = True
     credentials: dict[str, Any] = {}
+
+    @model_validator(mode="after")
+    def _prune_not_before_stale(self):
+        if self.stale_after_days and self.prune_after_days and self.prune_after_days < self.stale_after_days:
+            raise ValueError("prune_after_days must be at least stale_after_days")
+        return self
 
 
 class ConnectorOut(BaseModel):
@@ -130,6 +139,9 @@ class ConnectorOut(BaseModel):
     enabled: bool
     poll_interval_seconds: Optional[int]
     site: Optional[str] = None
+    stale_after_days: Optional[int] = None
+    prune_after_days: Optional[int] = None
+    prune_dry_run: Optional[bool] = True
     last_polled_at: Optional[datetime.datetime]
     last_error: Optional[str]
     created_at: datetime.datetime

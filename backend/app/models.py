@@ -37,6 +37,11 @@ class Connector(Base):
     encrypted_credentials = Column(Text)  # JSON blob, encrypted as a whole
     enabled = Column(Boolean, default=True)
     poll_interval_seconds = Column(Integer, nullable=True)
+    # Retention (see retention.py). Null = off. Pruning only deletes once
+    # prune_dry_run is switched off; until then it just logs what it would do.
+    stale_after_days = Column(Integer, nullable=True)
+    prune_after_days = Column(Integer, nullable=True)
+    prune_dry_run = Column(Boolean, default=True)
     last_polled_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)

@@ -78,6 +78,9 @@ export interface Connector {
   enabled: boolean;
   poll_interval_seconds: number | null;
   site: string | null;
+  stale_after_days: number | null;
+  prune_after_days: number | null;
+  prune_dry_run: boolean | null;
   last_polled_at: string | null;
   last_error: string | null;
   created_at: string;
